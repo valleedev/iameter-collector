@@ -9,12 +9,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/iameter/collector/internal/credentials"
-	"github.com/iameter/collector/internal/daemon"
-	"github.com/iameter/collector/internal/httpclient"
-	"github.com/iameter/collector/internal/logging"
-	"github.com/iameter/collector/internal/queue"
-	"github.com/iameter/collector/internal/syncer"
+	"github.com/valleedev/iameter-collector/internal/credentials"
+	"github.com/valleedev/iameter-collector/internal/daemon"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/logging"
+	"github.com/valleedev/iameter-collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/syncer"
 )
 
 // cmdDaemon implements section 15: run the background sync loop in the

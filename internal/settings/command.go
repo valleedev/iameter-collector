@@ -3,7 +3,7 @@ package settings
 import (
 	"strings"
 
-	"github.com/iameter/collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/platform"
 )
 
 // BuildCommand returns the exact command string to install as the

@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iameter/collector/internal/capture"
-	"github.com/iameter/collector/internal/config"
-	"github.com/iameter/collector/internal/device"
-	"github.com/iameter/collector/internal/logging"
-	"github.com/iameter/collector/internal/model"
-	"github.com/iameter/collector/internal/platform"
-	"github.com/iameter/collector/internal/providers/claude"
-	"github.com/iameter/collector/internal/queue"
-	"github.com/iameter/collector/internal/settings"
-	"github.com/iameter/collector/internal/statusline"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/capture"
+	"github.com/valleedev/iameter-collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/device"
+	"github.com/valleedev/iameter-collector/internal/logging"
+	"github.com/valleedev/iameter-collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/providers/claude"
+	"github.com/valleedev/iameter-collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/settings"
+	"github.com/valleedev/iameter-collector/internal/statusline"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 // cmdStatusline implements section 11: read Claude Code's statusLine JSON

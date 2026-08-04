@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 // Timeout bounds a single HTTP request/response round trip.

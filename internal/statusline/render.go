@@ -8,7 +8,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 // Render builds the "IA METER · 5h 68% · 7d 54%" line (section 12),

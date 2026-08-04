@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/iameter/collector/internal/idgen"
+	"github.com/valleedev/iameter-collector/internal/idgen"
 )
 
 type pairRequest struct {

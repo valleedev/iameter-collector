@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/iameter/collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
 )
 
 const systemdUnitName = "iameter.service"

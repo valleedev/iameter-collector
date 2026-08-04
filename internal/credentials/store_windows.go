@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/iameter/collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
 )
 
 // dpapiStore encrypts secrets with Windows DPAPI (CryptProtectData, tied

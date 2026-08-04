@@ -10,7 +10,7 @@ VERSION="${VERSION:-0.1.0-dev}"
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-MODULE="github.com/iameter/collector"
+MODULE="github.com/valleedev/iameter-collector"
 LDFLAGS="-s -w \
   -X ${MODULE}/internal/version.Version=${VERSION} \
   -X ${MODULE}/internal/version.Commit=${COMMIT} \

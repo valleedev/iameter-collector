@@ -9,14 +9,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/iameter/collector/internal/config"
-	"github.com/iameter/collector/internal/credentials"
-	"github.com/iameter/collector/internal/daemon"
-	"github.com/iameter/collector/internal/httpclient"
-	"github.com/iameter/collector/internal/platform"
-	"github.com/iameter/collector/internal/queue"
-	"github.com/iameter/collector/internal/settings"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/credentials"
+	"github.com/valleedev/iameter-collector/internal/daemon"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/settings"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 type checkStatus string

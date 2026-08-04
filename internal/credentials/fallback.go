@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iameter/collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
 )
 
 // fileStore is the universal fallback: one file per key, restrictive

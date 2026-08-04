@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iameter/collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/platform"
 )
 
 // ChainTimeout bounds how long a preserved third-party statusLine command

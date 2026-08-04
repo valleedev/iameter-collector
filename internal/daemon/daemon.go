@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/iameter/collector/internal/config"
-	"github.com/iameter/collector/internal/fsutil"
-	"github.com/iameter/collector/internal/logging"
-	"github.com/iameter/collector/internal/syncer"
+	"github.com/valleedev/iameter-collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/logging"
+	"github.com/valleedev/iameter-collector/internal/syncer"
 )
 
 // Defaults for production use. Tests override these via Config to run in

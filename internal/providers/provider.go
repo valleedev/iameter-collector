@@ -10,7 +10,7 @@ package providers
 import (
 	"io"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 // UsageProvider parses a provider's raw usage payload into the whitelisted

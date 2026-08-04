@@ -19,7 +19,7 @@
 # of silently succeeding.
 set -eu
 
-DEFAULT_RELEASE_BASE_URL="https://github.com/iameter/collector/releases"
+DEFAULT_RELEASE_BASE_URL="https://github.com/valleedev/iameter-collector/releases"
 RELEASE_BASE_URL="${IAMETER_RELEASE_BASE_URL:-$DEFAULT_RELEASE_BASE_URL}"
 VERSION="${IAMETER_VERSION:-latest}"
 PAIR_CODE=""

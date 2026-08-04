@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 const Name = "claude"

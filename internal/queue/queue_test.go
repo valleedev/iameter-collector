@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 func snap(fiveHourPct float64) model.UsageSnapshot {

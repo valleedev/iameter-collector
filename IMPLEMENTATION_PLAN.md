@@ -20,7 +20,7 @@ Se consultó `https://code.claude.com/docs/en/statusline` (redirect desde `docs.
 - No se encontraron contradicciones entre el prompt y la documentación oficial actual. No fue necesario registrar excepciones.
 
 ### Arquitectura propuesta
-Módulo Go único (`github.com/iameter/collector`), binario único `iameter`. Paquetes internos separados por responsabilidad (ver sección "Estructura" abajo), sin abstracciones sin uso. Proveedor de uso desacoplado vía interfaz `UsageProvider` para permitir proveedores futuros sin tocar cola/sync/pairing/daemon/installers.
+Módulo Go único (`github.com/valleedev/iameter-collector`), binario único `iameter`. Paquetes internos separados por responsabilidad (ver sección "Estructura" abajo), sin abstracciones sin uso. Proveedor de uso desacoplado vía interfaz `UsageProvider` para permitir proveedores futuros sin tocar cola/sync/pairing/daemon/installers.
 
 ### Riesgos técnicos identificados
 1. **No hay backend real.** Se implementa un mock server HTTP (`internal/mockserver` + `cmd/iameter-mockserver`, o subcomando dev) para poder probar pairing/sync end-to-end sin depender de infraestructura externa. Documentado como modo desarrollo, nunca presentado como producción.
@@ -218,7 +218,7 @@ Criterios: 4 scripts creados; detectan SO/arch; verifican SHA-256; rollback; CI 
 - Suite completa `go test ./...`, `go vet ./...`, `gofmt -l .` y compilación cruzada de los 6 targets, todo limpio tras estos cambios.
 
 **Decisiones técnicas:**
-- `IAMETER_RELEASE_BASE_URL` por defecto apunta a `github.com/iameter/collector/releases` (dominio real de GitHub) en vez de un dominio propio inventado — es el patrón estándar de instaladores tipo `curl | sh` (rustup, homebrew) y no finge tener infraestructura de producción que no existe: si el release no está publicado, falla con un mensaje explícito.
+- `IAMETER_RELEASE_BASE_URL` por defecto apunta a `github.com/valleedev/iameter-collector/releases` (dominio real de GitHub) en vez de un dominio propio inventado — es el patrón estándar de instaladores tipo `curl | sh` (rustup, homebrew) y no finge tener infraestructura de producción que no existe: si el release no está publicado, falla con un mensaje explícito.
 - Rollback: si la descarga o la verificación de checksum fallan, el script aborta **antes** de tocar el directorio de instalación (nada se sobrescribe). Si `iameter install` falla *después* de colocar el binario, el script no lo desinstala automáticamente — el binario es funcional y el usuario puede reintentar `iameter install` manualmente; deshacer cambios de Claude Code es responsabilidad del propio `iameter` (que ya tiene su propio backup/restauración, Fase 3), no del script de shell.
 - **Decisión de seguridad (continuación de la Fase 6):** los mismos scripts `install.sh` se probaron en este entorno con `HOME` redirigido a un directorio temporal precisamente para que la llamada real a `systemctl --user` (disparada por `iameter install`) no pudiera registrar nada contra la sesión systemd real de esta máquina — se confirmó que falla de forma controlada ("Unit file iameter.service does not exist") sin dejar rastro, exactamente como se documentó en la Fase 6.
 

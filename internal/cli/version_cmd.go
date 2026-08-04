@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iameter/collector/internal/platform"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 func cmdVersion(args []string) int {

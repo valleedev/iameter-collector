@@ -16,9 +16,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/iameter/collector/internal/fsutil"
-	"github.com/iameter/collector/internal/idgen"
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/idgen"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 // MaxItems bounds how many pending snapshots are kept while offline. At

@@ -3,7 +3,7 @@ package cli
 import (
 	"flag"
 
-	"github.com/iameter/collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/config"
 )
 
 // globalFlags holds the 6 global flags (section 10) registered on every

@@ -16,7 +16,7 @@
 param(
     [string]$PairCode = "",
     [string]$Version = $(if ($env:IAMETER_VERSION) { $env:IAMETER_VERSION } else { "latest" }),
-    [string]$ReleaseBaseUrl = $(if ($env:IAMETER_RELEASE_BASE_URL) { $env:IAMETER_RELEASE_BASE_URL } else { "https://github.com/iameter/collector/releases" }),
+    [string]$ReleaseBaseUrl = $(if ($env:IAMETER_RELEASE_BASE_URL) { $env:IAMETER_RELEASE_BASE_URL } else { "https://github.com/valleedev/iameter-collector/releases" }),
     [string]$InstallDir = $(if ($env:IAMETER_INSTALL_DIR) { $env:IAMETER_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "IAMeter\bin" })
 )
 

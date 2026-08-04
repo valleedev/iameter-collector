@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iameter/collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/platform"
 )
 
 // Path returns the absolute path to Claude Code's user-level settings.json.

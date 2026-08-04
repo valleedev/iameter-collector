@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iameter/collector/internal/credentials"
-	"github.com/iameter/collector/internal/httpclient"
-	"github.com/iameter/collector/internal/model"
-	"github.com/iameter/collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/credentials"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/queue"
 )
 
 // memCreds is a minimal in-memory credentials.Store for tests, avoiding

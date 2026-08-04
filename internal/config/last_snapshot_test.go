@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 func TestLoadLastSnapshotMissing(t *testing.T) {

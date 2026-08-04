@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iameter/collector/internal/mockserver"
+	"github.com/valleedev/iameter-collector/internal/mockserver"
 )
 
 const mockServerShutdownGrace = 3 * time.Second

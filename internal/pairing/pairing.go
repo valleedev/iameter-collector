@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/iameter/collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
 )
 
 const pairEndpoint = "/v1/devices/pair"

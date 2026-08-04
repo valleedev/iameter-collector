@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/iameter/collector/internal/cli"
+	"github.com/valleedev/iameter-collector/internal/cli"
 )
 
 func main() {

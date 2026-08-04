@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iameter/collector/internal/config"
-	"github.com/iameter/collector/internal/credentials"
-	"github.com/iameter/collector/internal/fsutil"
-	"github.com/iameter/collector/internal/httpclient"
-	"github.com/iameter/collector/internal/model"
-	"github.com/iameter/collector/internal/queue"
-	"github.com/iameter/collector/internal/syncer"
+	"github.com/valleedev/iameter-collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/credentials"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/syncer"
 )
 
 func acquireTestLock(t *testing.T, dataDir string) (*fsutil.FileLock, error) {

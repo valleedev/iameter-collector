@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iameter/collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/platform"
 )
 
 func TestRunChainedEchoesStdin(t *testing.T) {

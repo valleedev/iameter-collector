@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/iameter/collector/internal/fsutil"
-	"github.com/iameter/collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/platform"
 )
 
 const statusLineKey = "statusLine"

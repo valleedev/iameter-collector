@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 func fixture(t *testing.T, name string) string {

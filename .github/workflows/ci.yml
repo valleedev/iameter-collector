@@ -77,9 +77,9 @@ jobs:
           commit="$(git rev-parse --short HEAD)"
           build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           go build -trimpath -ldflags "-s -w \
-            -X github.com/iameter/collector/internal/version.Version=${version} \
-            -X github.com/iameter/collector/internal/version.Commit=${commit} \
-            -X github.com/iameter/collector/internal/version.BuildDate=${build_date}" \
+            -X github.com/valleedev/iameter-collector/internal/version.Version=${version} \
+            -X github.com/valleedev/iameter-collector/internal/version.Commit=${commit} \
+            -X github.com/valleedev/iameter-collector/internal/version.BuildDate=${build_date}" \
             -o "dist/iameter-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" \
             ./cmd/iameter
 

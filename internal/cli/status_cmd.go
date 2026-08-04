@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/iameter/collector/internal/config"
-	"github.com/iameter/collector/internal/daemon"
-	"github.com/iameter/collector/internal/platform"
-	"github.com/iameter/collector/internal/queue"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/daemon"
+	"github.com/valleedev/iameter-collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 func cmdStatus(args []string) int {

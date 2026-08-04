@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iameter/collector/internal/config"
-	"github.com/iameter/collector/internal/credentials"
-	"github.com/iameter/collector/internal/device"
+	"github.com/valleedev/iameter-collector/internal/config"
+	"github.com/valleedev/iameter-collector/internal/credentials"
+	"github.com/valleedev/iameter-collector/internal/device"
 )
 
 // cmdUnpair removes local pairing credentials (section: "unpair"). It

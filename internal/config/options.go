@@ -6,8 +6,8 @@ package config
 import (
 	"os"
 
-	"github.com/iameter/collector/internal/logging"
-	"github.com/iameter/collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/logging"
+	"github.com/valleedev/iameter-collector/internal/platform"
 )
 
 // DefaultAPIBaseURL points at the local mock dev server (internal/mockserver)

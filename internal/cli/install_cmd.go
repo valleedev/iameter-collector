@@ -8,10 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/iameter/collector/internal/daemon"
-	"github.com/iameter/collector/internal/platform"
-	"github.com/iameter/collector/internal/settings"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/daemon"
+	"github.com/valleedev/iameter-collector/internal/platform"
+	"github.com/valleedev/iameter-collector/internal/settings"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 // cmdInstall wires IA METER into Claude Code's statusLine (section 13/21),

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iameter/collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
 )
 
 // ErrCorruptJSON is returned when settings.json exists but does not parse.

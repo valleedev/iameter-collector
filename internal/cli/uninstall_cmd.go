@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iameter/collector/internal/daemon"
-	"github.com/iameter/collector/internal/settings"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/daemon"
+	"github.com/valleedev/iameter-collector/internal/settings"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 // cmdUninstall restores Claude Code's statusLine to its pre-IAMETER state

@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/iameter/collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
 )
 
 func testDevice() DeviceInfo {

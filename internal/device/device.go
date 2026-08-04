@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/iameter/collector/internal/idgen"
+	"github.com/valleedev/iameter-collector/internal/idgen"
 )
 
 // NewID generates a locally-unique device identifier of the form

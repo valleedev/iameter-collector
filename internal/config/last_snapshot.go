@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iameter/collector/internal/fsutil"
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/fsutil"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 const lastSnapshotFile = "last_snapshot.json"

@@ -3,7 +3,7 @@ package statusline
 import (
 	"testing"
 
-	"github.com/iameter/collector/internal/model"
+	"github.com/valleedev/iameter-collector/internal/model"
 )
 
 func TestRenderBoth(t *testing.T) {

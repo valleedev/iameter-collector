@@ -11,10 +11,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/iameter/collector/internal/credentials"
-	"github.com/iameter/collector/internal/httpclient"
-	"github.com/iameter/collector/internal/queue"
-	"github.com/iameter/collector/internal/version"
+	"github.com/valleedev/iameter-collector/internal/credentials"
+	"github.com/valleedev/iameter-collector/internal/httpclient"
+	"github.com/valleedev/iameter-collector/internal/queue"
+	"github.com/valleedev/iameter-collector/internal/version"
 )
 
 const usageEndpoint = "/v1/collector/usage"

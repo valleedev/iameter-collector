@@ -5,9 +5,9 @@ import "fmt"
 
 // These are overridden at build time via:
 //
-//	go build -ldflags "-X github.com/iameter/collector/internal/version.Version=... \
-//	  -X github.com/iameter/collector/internal/version.Commit=... \
-//	  -X github.com/iameter/collector/internal/version.BuildDate=..."
+//	go build -ldflags "-X github.com/valleedev/iameter-collector/internal/version.Version=... \
+//	  -X github.com/valleedev/iameter-collector/internal/version.Commit=... \
+//	  -X github.com/valleedev/iameter-collector/internal/version.BuildDate=..."
 var (
 	Version   = "0.1.0-dev"
 	Commit    = "unknown"
