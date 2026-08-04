@@ -89,7 +89,11 @@ func cmdStatusline(args []string) int {
 	}
 
 	if parseErr == nil && deviceID != "" && !rl.Empty() {
-		enqueueSnapshot(opts.DataDir, deviceID, *rl, logger)
+		snapshot := buildSnapshot(deviceID, *rl)
+		if err := config.SaveLastSnapshot(opts.ConfigDir, snapshot); err != nil {
+			logger.Warn("statusline: could not cache last snapshot: %v", err)
+		}
+		enqueueSnapshot(opts.DataDir, snapshot, logger)
 	}
 
 	if chained != nil {
@@ -125,13 +129,13 @@ func buildSnapshot(deviceID string, rl model.RateLimits) model.UsageSnapshot {
 // (section 11 point 9, section 14) so it survives offline periods until
 // the daemon/syncer (Phase 5/6) can send it. Failures are logged, never
 // fatal — statusline must finish fast regardless of disk issues.
-func enqueueSnapshot(dataDir, deviceID string, rl model.RateLimits, logger *logging.Logger) {
+func enqueueSnapshot(dataDir string, snapshot model.UsageSnapshot, logger *logging.Logger) {
 	q, err := queue.Open(dataDir)
 	if err != nil {
 		logger.Warn("statusline: could not open queue: %v", err)
 		return
 	}
-	if _, err := q.Enqueue(buildSnapshot(deviceID, rl)); err != nil {
+	if _, err := q.Enqueue(snapshot); err != nil {
 		logger.Warn("statusline: could not enqueue snapshot: %v", err)
 	}
 }

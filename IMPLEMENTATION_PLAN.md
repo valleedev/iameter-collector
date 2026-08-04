@@ -141,8 +141,36 @@ Criterios: escritura atómica; dedup; recuperación ante corrupción; límite de
 
 **Siguiente fase:** Fase 5 — emparejamiento y cliente HTTP contra un mock server de desarrollo.
 
-## Phase 5 — Emparejamiento y backend — `[ ]`
+## Phase 5 — Emparejamiento y backend — `[x]`
 Criterios: pairing contra mock server; credenciales nunca en texto plano en logs; cliente HTTP con reintentos/backoff/timeouts/idempotencia; pruebas httptest de todos los códigos de sección 26.
+
+**Archivos creados:** `internal/idgen/{idgen,idgen_test}.go` (extraído de `device`), `internal/credentials/{store,fallback,store_linux,store_darwin,store_windows,fallback_test}.go`, `internal/httpclient/{client,client_test}.go`, `internal/pairing/{pairing,pairing_test}.go`, `internal/syncer/{syncer,syncer_test}.go`, `internal/mockserver/{server,server_test}.go`, `internal/cli/{pair_cmd,unpair_cmd,sync_cmd,mockserver_cmd,cli_test}.go`, `internal/config/{last_snapshot,last_snapshot_test}.go`.
+
+**Funcionalidad implementada:**
+- `credentials.Store` (sección 18): Linux vía `secret-tool` (D-Bus Secret Service) con detección de disponibilidad real (prueba un lookup contra el daemon antes de comprometerse); macOS vía CLI `security` (Keychain); Windows vía DPAPI puro (`CryptProtectData`/`CryptUnprotectData` con `syscall.NewLazyDLL`, **sin CGO ni dependencias externas**); fallback a archivo `0600` cuando ninguno está disponible, con `IsFallback()` para que `doctor`/`pair` adviertan al usuario (verificado en este entorno: sin `secret-tool` instalado, cae a fallback correctamente).
+- `httpclient.Client`: timeout fijo por request, límite de tamaño de respuesta (1 MiB), `User-Agent: IAMeter-Collector/<version>`, parseo de `Retry-After` (formato segundos y HTTP-date), sin reintentos propios (política de reintentos vive en `syncer`/futuro `daemon`).
+- `pairing.Pair`: `POST /v1/devices/pair` con manejo explícito de 400/404/409/403/5xx/JSON inválido/respuesta incompleta — cada uno con un sentinel error propio.
+- `syncer.SyncOnce`: recorre la cola en orden FIFO, se detiene en el primer ítem no confirmado; 200/201 confirman y hacen `Ack`; 409 se trata como ya-entregado (replay idempotente); 401/403 detienen todo el lote y devuelven `ErrUnauthorized`; 429/5xx incrementan `Attempts` y detienen el lote respetando `Retry-After`; nunca reordena ni salta ítems.
+- `mockserver.Server`: backend de desarrollo real (no simulado) con estado en memoria — códigos de emparejamiento de un solo uso, tokens por dispositivo, deduplicación por `Idempotency-Key`. Expuesto como `iameter mock-server` (comando adicional fuera de los 10 principales, documentado como herramienta de desarrollo).
+- `iameter pair/unpair/sync` reales: `pair` rechaza re-emparejar localmente sin `unpair` antes; `sync` reporta claramente "no emparejado" vs. token rechazado vs. error de red; `unpair` borra el token del almacén de credenciales y genera un nuevo `device_id` local.
+- **Nuevo:** `config.SaveLastSnapshot`/`LoadLastSnapshot` — caché del último snapshot capturado, independiente del ciclo de vida de la cola, para que `status` siga mostrando el consumo tras una sincronización exitosa (ver "Problemas encontrados").
+- `doctor` ahora reporta credenciales y conectividad reales (backend inalcanzable con la URL de desarrollo por defecto es `WARN`, no `ERROR` — es el estado esperado sin `mock-server` corriendo).
+
+**Pruebas ejecutadas:** `go test ./...` — pruebas nuevas: `credentials` (round-trip, ausente, borrado idempotente, permisos 0600, rechazo de path traversal en la clave, selección de backend real vía `New()`); `httpclient` (éxito, `Retry-After` en ambos formatos, error de red, timeout, respuesta sobredimensionada rechazada); `pairing` (éxito + los 6 casos de error de la sección 16, todos con `httptest`); `syncer` (los 11 escenarios de la sección 26 "Sincronización": 200/201/409/401/403/429+Retry-After/5xx/timeout/red/respuesta inesperada/orden/idempotencia entre reintentos/cola vacía/no emparejado); `mockserver` (ciclo completo pair→sync→idempotencia→heartbeat contra el servidor real, no mocks anidados); `cli` (reordenamiento de flags). `go vet`, `gofmt -l .` limpios en Linux/Windows/macOS (build tags). Prueba manual end-to-end repetida dos veces tras corregir bugs reales (ver abajo) con el binario compilado + `iameter mock-server` real: emparejar, re-emparejar (rechazado), capturar vía `statusline`, sincronizar, verificar `status`/`doctor`, inspeccionar el archivo de credenciales fallback, desemparejar, confirmar que `sync` se niega tras desemparejar. Cross-compilación verificada de nuevo para los 6 targets + `go vet` en los 3 SO.
+
+**Decisiones técnicas:**
+- Ningún almacén de credenciales usa CGO ni añade dependencias externas: Linux/macOS invocan binarios del sistema (`secret-tool`, `security`) vía `os/exec`; Windows usa únicamente `syscall.NewLazyDLL` (stdlib) para DPAPI.
+- `mock-server` es un comando adicional del mismo binario `iameter` (no un binario separado), preservando "un único binario" de la sección 8, y explícitamente fuera de los 10 comandos principales de la sección 10.
+- `SyncOnce` no reintenta internamente — cada llamada es una sola pasada; `iameter sync` la invoca una vez y termina (sección 15); el daemon (Fase 6) decidirá cuándo volver a llamarla y con qué backoff.
+
+**Problemas encontrados y corregidos (los tres detectados por las pruebas manuales end-to-end, no por los tests unitarios — quedan documentados porque son la evidencia real de que se ejecutó, no solo se afirmó):**
+1. `iameter pair CODE --config-dir X` fallaba: el paquete `flag` de Go deja de reconocer flags tras el primer argumento posicional, así que `--config-dir` y el resto se interpretaban como argumentos posicionales adicionales. Corregido con `reorderFlagsFirst` (mueve flags reconocidas antes que los posicionales), con pruebas dedicadas en `cli_test.go`.
+2. `iameter mock-server --pairing-code X` generaba un código pero nunca lo registraba como válido — la variable `X` no se pasaba a `mockserver.New(...)`. Corregido; prueba de regresión `TestMockServerPresetPairingCodeUsable` añadida.
+3. Tras una sincronización exitosa, `iameter status` dejaba de mostrar el consumo (leía el último ítem de la cola, que había quedado vacía). Corregido con una caché independiente (`last_snapshot.json`) que sobrevive a la cola.
+
+**Riesgos pendientes:** el heartbeat existe en el mock server y en `syncer.Heartbeat`, pero nada lo invoca todavía — eso es responsabilidad del daemon (Fase 6).
+
+**Siguiente fase:** Fase 6 — daemon multiplataforma (sincronización en segundo plano, heartbeats, backoff exponencial, registro como servicio de usuario en los tres SO).
 
 ## Phase 6 — Daemon — `[ ]`
 Criterios: single-instance; graceful shutdown; heartbeat; backoff+jitter; respeta Retry-After; detiene reintentos en 401/403; `iameter sync` sincroniza una vez y termina.

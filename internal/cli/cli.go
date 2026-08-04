@@ -24,6 +24,9 @@ Commands:
   uninstall    Remove IA METER and restore previous configuration
   unpair       Remove local pairing credentials
 
+Dev tools:
+  mock-server  Run a local, in-memory backend for development/testing
+
 Global flags (valid before or after the command):
   --api-base-url string   Backend base URL (env IAMETER_API_BASE_URL)
   --config-dir string     Override config directory
@@ -85,6 +88,36 @@ func splitArgs(args []string) (cmd string, cmdArgs []string) {
 	return "", hoisted
 }
 
+// reorderFlagsFirst moves recognized global flags (and their values) ahead
+// of any positional arguments, so commands that take a positional arg
+// (currently only `pair <CODE>`) work regardless of whether flags appear
+// before or after it — e.g. both `iameter pair CODE --json` and
+// `iameter pair --json CODE`. This is needed because Go's flag package
+// stops parsing flags at the first non-flag token.
+func reorderFlagsFirst(args []string) []string {
+	var flags, positionals []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		key := a
+		if idx := strings.IndexByte(a, '='); idx >= 0 {
+			key = a[:idx]
+		}
+		switch {
+		case globalValueFlags[key] && !strings.Contains(a, "="):
+			flags = append(flags, a)
+			if i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+		case globalValueFlags[key] || globalBoolFlags[key]:
+			flags = append(flags, a)
+		default:
+			positionals = append(positionals, a)
+		}
+	}
+	return append(flags, positionals...)
+}
+
 // Run dispatches to the requested subcommand and returns a process exit code.
 func Run(args []string) int {
 	if len(args) < 1 {
@@ -118,6 +151,8 @@ func Run(args []string) int {
 		return cmdUninstall(rest)
 	case "unpair":
 		return cmdUnpair(rest)
+	case "mock-server":
+		return cmdMockServer(rest)
 	case "help", "-h", "--help":
 		fmt.Fprint(os.Stdout, usage)
 		return 0

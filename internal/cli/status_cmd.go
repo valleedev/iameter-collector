@@ -28,6 +28,7 @@ func cmdStatus(args []string) int {
 	}
 
 	st := buildStatusReport(opts, dc)
+	fillUsageStatus(&st, opts.ConfigDir)
 	fillQueueStatus(&st, opts.DataDir)
 
 	if opts.JSON {
@@ -78,9 +79,31 @@ func buildStatusReport(opts config.Options, dc config.DeviceConfig) statusReport
 	}
 }
 
-// fillQueueStatus adds the pending count and most recent snapshot to st.
-// Errors opening/reading the queue are non-fatal for `status` — an
-// unreadable queue shouldn't stop the rest of the report from printing.
+// fillUsageStatus reads the last-known-usage cache (independent of the
+// sync queue's contents, see internal/config.SaveLastSnapshot) so `status`
+// keeps showing consumption percentages even after everything has synced
+// and the queue is empty.
+func fillUsageStatus(st *statusReport, configDir string) {
+	snapshot, ok, err := config.LoadLastSnapshot(configDir)
+	if err != nil || !ok {
+		return
+	}
+	st.LastSnapshotAt = snapshot.CapturedAt
+	if fh := snapshot.RateLimits.FiveHour; fh != nil {
+		pct := fh.UsedPercentage
+		st.FiveHourPct = &pct
+		st.FiveHourResetsAt = fh.ResetsAt
+	}
+	if sd := snapshot.RateLimits.SevenDay; sd != nil {
+		pct := sd.UsedPercentage
+		st.SevenDayPct = &pct
+		st.SevenDayResetsAt = sd.ResetsAt
+	}
+}
+
+// fillQueueStatus adds the pending sync count to st. Errors
+// opening/reading the queue are non-fatal — an unreadable queue shouldn't
+// stop the rest of the report from printing.
 func fillQueueStatus(st *statusReport, dataDir string) {
 	q, err := queue.Open(dataDir)
 	if err != nil {
@@ -91,21 +114,6 @@ func fillQueueStatus(st *statusReport, dataDir string) {
 		return
 	}
 	st.QueuePending = len(pending)
-	if len(pending) == 0 {
-		return
-	}
-	last := pending[len(pending)-1]
-	st.LastSnapshotAt = last.Snapshot.CapturedAt
-	if fh := last.Snapshot.RateLimits.FiveHour; fh != nil {
-		pct := fh.UsedPercentage
-		st.FiveHourPct = &pct
-		st.FiveHourResetsAt = fh.ResetsAt
-	}
-	if sd := last.Snapshot.RateLimits.SevenDay; sd != nil {
-		pct := sd.UsedPercentage
-		st.SevenDayPct = &pct
-		st.SevenDayResetsAt = sd.ResetsAt
-	}
 }
 
 func formatResetTime(unixSeconds int64) string {

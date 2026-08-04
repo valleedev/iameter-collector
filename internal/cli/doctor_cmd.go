@@ -1,13 +1,17 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/iameter/collector/internal/config"
+	"github.com/iameter/collector/internal/credentials"
+	"github.com/iameter/collector/internal/httpclient"
 	"github.com/iameter/collector/internal/platform"
 	"github.com/iameter/collector/internal/queue"
 	"github.com/iameter/collector/internal/settings"
@@ -113,8 +117,8 @@ func runDoctorChecks(opts config.Options) []doctorCheck {
 	checks = append(checks, statusLineCheck())
 
 	checks = append(checks, queueCheck(opts.DataDir))
-	checks = append(checks, doctorCheck{Name: "Credential store", Status: checkWarn, Detail: "not yet implemented (Phase 5)"})
-	checks = append(checks, doctorCheck{Name: "Backend connectivity", Status: checkWarn, Detail: "not yet implemented (Phase 5)"})
+	checks = append(checks, credentialStoreCheck(opts.DataDir))
+	checks = append(checks, backendConnectivityCheck(opts.APIBaseURL, opts.IsDefaultDevBackend()))
 	checks = append(checks, doctorCheck{Name: "Daemon", Status: checkWarn, Detail: "not yet implemented (Phase 6)"})
 
 	return checks
@@ -133,6 +137,31 @@ func queueCheck(dataDir string) doctorCheck {
 		return doctorCheck{Name: "Local queue", Status: checkWarn, Detail: "no snapshots captured yet — send a message in Claude Code"}
 	}
 	return doctorCheck{Name: "Local queue", Status: checkOK, Detail: fmt.Sprintf("%d pending snapshot(s)", n)}
+}
+
+func credentialStoreCheck(dataDir string) doctorCheck {
+	store := credentials.New(dataDir)
+	if store.IsFallback() {
+		return doctorCheck{Name: "Credential store", Status: checkWarn,
+			Detail: "no OS-native secret store available, using " + store.Name()}
+	}
+	return doctorCheck{Name: "Credential store", Status: checkOK, Detail: store.Name()}
+}
+
+func backendConnectivityCheck(apiBaseURL string, isDevDefault bool) doctorCheck {
+	client := httpclient.New(apiBaseURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx); err != nil {
+		// An unreachable *default* dev backend just means no `iameter
+		// mock-server` is running — expected out of the box, not an error.
+		status := checkErr
+		if isDevDefault {
+			status = checkWarn
+		}
+		return doctorCheck{Name: "Backend connectivity", Status: status, Detail: "unreachable: " + err.Error()}
+	}
+	return doctorCheck{Name: "Backend connectivity", Status: checkOK, Detail: apiBaseURL}
 }
 
 func statusLineCheck() doctorCheck {
