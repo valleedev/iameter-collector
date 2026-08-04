@@ -228,10 +228,74 @@ Criterios: 4 scripts creados; detectan SO/arch; verifican SHA-256; rollback; CI 
 
 **Siguiente fase:** Fase 8 — endurecimiento, documentación (`SECURITY.md`, `PRIVACY.md`, `README.md`), validación final.
 
-## Phase 8 — Endurecimiento, documentación, validación final — `[ ]`
+## Phase 8 — Endurecimiento, documentación, validación final — `[x]`
 Criterios: SECURITY.md, PRIVACY.md completos y verídicos; `go build ./...`, `go vet ./...`, `go test ./...` pasan; 6 binarios compilados; privacidad verificada contra código.
+
+**Archivos creados:** `SECURITY.md`, `PRIVACY.md`, `README.md`. Modificados: `internal/logging/logging.go` (se eliminó `RedactToken`, código muerto — ver hallazgo abajo), `internal/daemon/daemon_test.go` (nueva prueba de recuperación de conectividad, criterio 9 de la sección 33).
+
+**Revisión de seguridad realizada (checklist sección 24), con hallazgos:**
+- **Path traversal**: `credentials.fileStore.keyPath` rechaza claves con separadores de ruta (probado). `settings.Path()` usa una ruta fija, no input externo.
+- **Symlink attacks**: `settings.load()` usa `os.Lstat` + rechaza explícitamente symlinks (`ErrSymlink`, probado). Todas las escrituras (`fsutil.AtomicWriteFile`) usan rename atómico, que **reemplaza** cualquier symlink en el destino en vez de seguirlo — protección estructural, no un chequeo que se pueda olvidar.
+- **Permisos inseguros**: todos los archivos de credenciales/config son `0600`, directorios `0700` — verificado con pruebas (`TestFileStorePermissions`).
+- **Inyección de comandos**: ningún comando se construye por concatenación de datos no confiables. `statusline.RunChained` re-ejecuta exactamente el comando que Claude Code ya tenía configurado (no añade una frontera de confianza nueva). Los almacenes de credenciales (`secret-tool`/`security`) pasan argumentos como elementos de `argv`, nunca interpolados en una shell.
+- **JSON excesivo / respuestas HTTP maliciosas**: límites de tamaño verificados en `capture` (1 MiB), `httpclient` (1 MiB de respuesta), `mockserver` (`http.MaxBytesReader`).
+- **Fuga de tokens en logs**: **hallazgo real** — `logging.RedactToken` existía desde la Fase 1 pero nunca se usaba en ningún punto del código (verificado con `grep`). Investigado el motivo: ningún camino de código registra el token en absoluto, ni siquiera en forma redactada — es la garantía más fuerte posible, pero dejaba código muerto. Se eliminó `RedactToken` y se documentó explícitamente en `SECURITY.md` que el token nunca se registra, en ninguna forma.
+- **Corrupción de cola / carreras de concurrencia**: cubierto por las pruebas de la Fase 4 (cuarentena de archivos corruptos, 30 goroutines concurrentes sin pérdidas).
+- **Binarios manipulados**: verificación SHA-256 en los instaladores antes de instalar nada (Fase 7).
+
+**Pruebas ejecutadas:**
+- `go test ./...` — **149 sub-pruebas pasando** en 17 paquetes.
+- `go test -race ./...` — sin advertencias de carrera de datos en ningún paquete.
+- `go vet ./...` y `gofmt -l .` limpios en Linux, Windows y macOS (vía `GOOS=...`).
+- Compilación cruzada final de los 6 targets exigidos, todos exitosos: `linux/{amd64,arm64}`, `windows/{amd64,arm64}`, `darwin/{amd64,arm64}`.
+- **Nueva prueba `TestRunSyncsAfterConnectivityRecovers`** (`internal/daemon`): backend real (`httptest`) que falla las primeras 3 peticiones y luego responde `200`; se verifica que el daemon, **sin reiniciarse**, drena la cola en cuanto el backend se recupera — cubre explícitamente el criterio 9 de la sección 33 ("el daemon sincronice al recuperar Internet"), que hasta ahora solo estaba cubierto indirectamente.
+- Prueba manual final end-to-end con el binario real + `iameter mock-server`: ciclo completo `pair --json` → `statusline` → `sync --json` → `status --json` → `doctor --json` → `version --json`, confirmando que **todos** los modos de salida JSON producen JSON válido y coherente entre sí (mismo `device_id`, mismos porcentajes, etc.).
+- Verificación cruzada de `PRIVACY.md` contra el código: inspeccionados `internal/model/model.go` (exactamente 6 campos en el payload saliente) y `internal/providers/claude/claude.go` (el struct de parseo no declara ningún campo fuera de `rate_limits`), confirmando que las afirmaciones del documento son ciertas al nivel de tipos, no solo de intención.
+
+**Decisiones técnicas:**
+- **Desviación justificada de la sección 9**: no se creó un paquete `internal/installer/`. La instalación del *binario* (descarga, checksum, colocación) ocurre necesariamente *antes* de que exista un binario Go que ejecutar — por eso vive en `installers/*.sh|ps1` (sección 21), como pide el propio prompt. La configuración *posterior* a tener el binario (statusLine, servicio de fondo) ya vive en `internal/settings` + `internal/daemon` + `internal/cli/install_cmd.go`; un `internal/installer/` adicional habría sido una envoltura fina sin lógica propia — exactamente el tipo de "abstracción sin uso real" que la sección 9 pide evitar.
+- Paquetes añadidos más allá de la lista ilustrativa de la sección 9 (`internal/model`, `internal/fsutil`, `internal/idgen`, `internal/mockserver`, `internal/logging`): cada uno tiene un motivo concreto documentado en su propio commit de fase (tipos compartidos, utilidades de escritura atómica/lock reutilizadas por 3+ paquetes, generación de IDs reutilizada por `device` y `queue`, backend de desarrollo real, logger sin dependencias).
+
+**Problemas encontrados y corregidos:** el hallazgo de `RedactToken` sin usar (arriba). Ningún otro hallazgo de la revisión de seguridad requirió cambios de código — todos los mecanismos de defensa ya estaban implementados correctamente en fases anteriores.
+
+**Riesgos pendientes:** ver "Limitaciones reales conocidas" abajo — todas están también en `SECURITY.md`.
 
 ---
 
-## Limitaciones reales conocidas (actualizado en Fase 8)
-Ver sección final de este documento, completada al cierre de Fase 8.
+## Limitaciones reales conocidas
+
+Estas son las limitaciones genuinas del MVP entregado, no genéricas — cada una se descubrió durante el desarrollo de este proyecto concreto:
+
+1. **Sin backend real hospedado.** `iameter mock-server` es un backend de desarrollo real y funcional (no un stub), pero no existe un backend de producción. Fuera de alcance según la sección 30/34.
+2. **Sin firma de código ni notarización.** Binarios de Windows sin firmar, binarios de macOS sin firmar/notarizar — Gatekeeper/SmartScreen advertirán al usuario. Documentado como requisito para una distribución pública real (sección 28).
+3. **Registro de servicio (`systemd --user`/`launchctl`/`schtasks`) no probado contra una sesión real en vivo**, por decisión deliberada de seguridad: este entorno de desarrollo es la máquina real del operador, no un contenedor desechable, y activar un servicio persistente con reinicio automático sin que se pidiera explícitamente habría sido una mutación fuera del alcance solicitado (Fase 6). La generación de contenido (unit files/plist/comando `schtasks`) está probada como funciones puras; el camino de fallo controlado (cuando `systemctl` no está disponible) se probó de verdad.
+4. **Los almacenes de credenciales de macOS (Keychain vía `security`) y Windows (DPAPI vía `syscall`) se verificaron por compilación cruzada + `go vet`, no por ejecución real** — este entorno es Linux. El fallback de Linux (sin `secret-tool` instalado) sí se verificó en ejecución real, incluyendo la selección automática de store en `credentials.New()`.
+5. **Sin flag `--name` para personalizar el nombre del dispositivo antes de emparejar** — se usa el hostname real por defecto (`device.DefaultName()`). Documentado en `PRIVACY.md`.
+6. **La carrera de primer arranque en `device_id`** (dos invocaciones concurrentes de `iameter statusline` sin `device.json` previo) puede generar un `device_id` local no determinista en ese instante único — nunca corrompe el archivo, y se vuelve irrelevante en cuanto el dispositivo se empareja (el backend asigna su propio `device_id`). Documentado desde la Fase 2.
+7. **No existe un release público real** en `IAMETER_RELEASE_BASE_URL` (los GitHub Releases de este repo) — la lógica de los instaladores se verificó contra un servidor HTTP real controlado por esta sesión de desarrollo, no contra releases publicados.
+8. **Sin límite de tamaño/edad configurable por el usuario para la cola** (`MaxItems=500`, `MinReheartbeat=5min` son constantes fijas, razonables pero no expuestas como flags).
+
+## Checklist final de aceptación (sección 33)
+
+| # | Criterio | Estado |
+|---|---|---|
+| 1 | Todas las fases completadas | ✅ Fases 0–8 |
+| 2 | El proyecto compila | ✅ `go build ./...` |
+| 3 | `go test ./...` pasa | ✅ 149 sub-pruebas, 17 paquetes |
+| 4 | `go vet ./...` pasa | ✅ en Linux/Windows/macOS |
+| 5 | Existen 6 binarios | ✅ `scripts/build-all.sh` verificado |
+| 6 | El parser ignora campos no autorizados | ✅ whitelist a nivel de tipo + prueba dedicada |
+| 7 | statusLine funciona sin Internet | ✅ verificado, ~2ms de latencia |
+| 8 | La cola soporta desconexiones | ✅ 14 pruebas + prueba de concurrencia real |
+| 9 | El daemon sincroniza al recuperar Internet | ✅ `TestRunSyncsAfterConnectivityRecovers` |
+| 10 | Emparejamiento funciona contra el mock server | ✅ end-to-end real, no solo unitario |
+| 11 | La instalación es idempotente | ✅ probado (repetida, encadenada) |
+| 12 | La desinstalación restaura la configuración | ✅ probado, incluyendo statusLine externo |
+| 13 | Un statusLine anterior sigue funcionando | ✅ encadenamiento real probado |
+| 14 | No aparecen tokens en logs | ✅ verificado por inspección de código, no solo por promesa |
+| 15 | Existen instaladores para los 3 sistemas | ✅ `install.sh`/`install.ps1` + sus `uninstall` |
+| 16 | Documentación completa | ✅ README, SECURITY, PRIVACY, este plan |
+| 17 | No hay TODO críticos ocultos | ✅ verificado con `grep`, cero hallazgos |
+| 18 | Limitaciones reales documentadas | ✅ sección anterior + `SECURITY.md` |
+| 19 | Este documento refleja el estado final real | ✅ |
+| 20 | La declaración de privacidad coincide con el código | ✅ verificado campo por campo |

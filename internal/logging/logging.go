@@ -1,7 +1,8 @@
-// Package logging provides a small leveled logger that never prints
-// secrets. Callers pass raw values; Redact* helpers must be used explicitly
-// on anything that could contain a token, full statusLine JSON, or other
-// sensitive payload before it reaches a log call.
+// Package logging provides a small leveled logger. No code path in this
+// project ever passes a device token, raw statusLine JSON, or other
+// sensitive payload to it — see SECURITY.md's "what we never log" section.
+// If a future caller needs to log something token-adjacent, add a Redact*
+// helper here rather than logging it raw.
 package logging
 
 import (
@@ -83,17 +84,3 @@ func (l *Logger) Debug(format string, args ...any) { l.log(LevelDebug, format, a
 func (l *Logger) Info(format string, args ...any)  { l.log(LevelInfo, format, args...) }
 func (l *Logger) Warn(format string, args ...any)  { l.log(LevelWarn, format, args...) }
 func (l *Logger) Error(format string, args ...any) { l.log(LevelError, format, args...) }
-
-// RedactToken returns a short, non-reversible preview safe for logs:
-// first 4 chars + "..." + length. Never log full tokens.
-func RedactToken(token string) string {
-	if token == "" {
-		return "<empty>"
-	}
-	n := len(token)
-	prefix := token
-	if n > 4 {
-		prefix = token[:4]
-	}
-	return fmt.Sprintf("%s...(%d chars)", prefix, n)
-}

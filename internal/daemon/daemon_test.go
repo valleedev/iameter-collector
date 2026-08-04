@@ -239,6 +239,52 @@ func TestRunHeartbeatFires(t *testing.T) {
 	}
 }
 
+// TestRunSyncsAfterConnectivityRecovers is section 33's explicit
+// acceptance criterion 9: "el daemon sincronice al recuperar Internet".
+// The backend fails every request for a short window (simulating an
+// outage) and then starts succeeding; the daemon must, without being
+// restarted, eventually drain the queue once the backend recovers.
+func TestRunSyncsAfterConnectivityRecovers(t *testing.T) {
+	var requests int32
+	const failFirstN = 3
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&requests, 1)
+		if n <= failFirstN {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	configDir := t.TempDir()
+	pairedDeviceConfig(t, configDir)
+	q := mustQueue(t)
+	q.Enqueue(model.UsageSnapshot{DeviceID: "dev_test", RateLimits: model.RateLimits{FiveHour: &model.RateWindow{UsedPercentage: 1, ResetsAt: 1}}})
+
+	cfg := Config{
+		Syncer:       syncer.New(q, httpclient.New(srv.URL), newMemCreds("tok")),
+		ConfigDir:    configDir,
+		DataDir:      t.TempDir(),
+		SyncInterval: 5 * time.Millisecond,
+		MaxBackoff:   20 * time.Millisecond, // keep backoff short so the test doesn't need to wait long
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	Run(ctx, cfg)
+
+	n, err := q.Len()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("queue Len() = %d, want 0 — daemon did not sync after the backend recovered (requests made: %d)", n, atomic.LoadInt32(&requests))
+	}
+	if atomic.LoadInt32(&requests) <= failFirstN {
+		t.Errorf("only %d requests were made, want more than %d (recovery never attempted)", requests, failFirstN)
+	}
+}
+
 func mustQueue(t *testing.T) *queue.Queue {
 	t.Helper()
 	q, err := queue.Open(t.TempDir())
