@@ -200,8 +200,33 @@ Prueba manual end-to-end con el binario real y `iameter mock-server`: `iameter d
 
 **Siguiente fase:** Fase 7 — instaladores (`install.sh`/`install.ps1`) y CI/CD (GitHub Actions, compilación de los 6 targets, checksums).
 
-## Phase 7 — Instaladores y distribución — `[ ]`
+## Phase 7 — Instaladores y distribución — `[x]`
 Criterios: 4 scripts creados; detectan SO/arch; verifican SHA-256; rollback; CI compila 6 targets + checksums.
+
+**Archivos creados:** `scripts/build-all.sh`, `installers/{install.sh,uninstall.sh,install.ps1,uninstall.ps1}`, `.github/workflows/ci.yml`, `.gitignore`.
+
+**Funcionalidad implementada:**
+- `scripts/build-all.sh`: compila los 6 targets con `CGO_ENABLED=0`, inyecta versión/commit/fecha vía `-ldflags`, genera `checksums.txt` con `sha256sum`/`shasum` (detecta cuál existe).
+- `installers/install.sh` (Linux/macOS) e `installers/install.ps1` (Windows): detectan SO+arquitectura, descargan el binario correcto vía `curl`/`wget`/`Invoke-WebRequest`, descargan y **verifican SHA-256 antes de instalar nada** (abortan sin tocar el sistema si el checksum no coincide — "binarios manipulados", sección 24), instalan en una ruta de usuario sin `sudo`/admin, avisan si esa ruta no está en `PATH`, ejecutan `iameter install` (con `--pair CODE` opcional) y `iameter doctor`. La URL de descarga es configurable vía `IAMETER_RELEASE_BASE_URL`/`-ReleaseBaseUrl` (por defecto apunta a los GitHub Releases de este repo — un dominio real, GitHub, no uno inventado; si no existe un release publicado ahí, la descarga falla con un mensaje claro en vez de fingir éxito, cumpliendo "no presentes un dominio inexistente como producción").
+- `installers/uninstall.sh`/`uninstall.ps1`: ejecutan `iameter uninstall` (restaura statusLine) + `iameter unpair` (borra credenciales), eliminan el binario, y **conservan deliberadamente** `device_id`/cola/caché de consumo (no destructivo por defecto), indicando al usuario cómo borrarlos manualmente si lo desea.
+- `.github/workflows/ci.yml`: job `test` (gofmt/vet/`go test -race`), job `build` (matriz de 6 targets, sube artefactos), job `checksums` (genera `checksums.txt` combinando los artefactos), job `release` (solo en tags `v*`, publica un GitHub Release con los 6 binarios + checksums vía `softprops/action-gh-release`).
+
+**Pruebas ejecutadas:**
+- `scripts/build-all.sh` ejecutado realmente: genera los 6 binarios + `checksums.txt`, verificado con `sha256sum -c checksums.txt` (las 6 sumas coinciden) y `./dist/iameter-linux-amd64 version` confirma que la versión/commit/fecha inyectados son correctos.
+- **`install.sh` probado end-to-end de verdad**, no solo revisado: se sirvieron los binarios reales vía un servidor HTTP local (con `HOME` apuntando a un directorio temporal para no tocar la configuración real de esta máquina) y se ejecutó el script completo — descarga real, verificación de checksum real, instalación real del binario, ejecución real de `iameter install` (statusLine configurado correctamente en el `~/.claude/settings.json` *falso*) y `iameter doctor`. Luego se ejecutó `uninstall.sh` end-to-end: restaura `settings.json` a `{}` (estado previo), elimina el binario, y una segunda ejecución confirma idempotencia ("nada que hacer").
+- `sh -n` confirma sintaxis válida en ambos scripts POSIX; `python3 -c "import yaml; ..."` confirma que `ci.yml` es YAML válido.
+- Suite completa `go test ./...`, `go vet ./...`, `gofmt -l .` y compilación cruzada de los 6 targets, todo limpio tras estos cambios.
+
+**Decisiones técnicas:**
+- `IAMETER_RELEASE_BASE_URL` por defecto apunta a `github.com/iameter/collector/releases` (dominio real de GitHub) en vez de un dominio propio inventado — es el patrón estándar de instaladores tipo `curl | sh` (rustup, homebrew) y no finge tener infraestructura de producción que no existe: si el release no está publicado, falla con un mensaje explícito.
+- Rollback: si la descarga o la verificación de checksum fallan, el script aborta **antes** de tocar el directorio de instalación (nada se sobrescribe). Si `iameter install` falla *después* de colocar el binario, el script no lo desinstala automáticamente — el binario es funcional y el usuario puede reintentar `iameter install` manualmente; deshacer cambios de Claude Code es responsabilidad del propio `iameter` (que ya tiene su propio backup/restauración, Fase 3), no del script de shell.
+- **Decisión de seguridad (continuación de la Fase 6):** los mismos scripts `install.sh` se probaron en este entorno con `HOME` redirigido a un directorio temporal precisamente para que la llamada real a `systemctl --user` (disparada por `iameter install`) no pudiera registrar nada contra la sesión systemd real de esta máquina — se confirmó que falla de forma controlada ("Unit file iameter.service does not exist") sin dejar rastro, exactamente como se documentó en la Fase 6.
+
+**Problemas encontrados:** el entorno de pruebas bloquea `pkill`/señales entre procesos (aparentemente por política del sandbox), lo que impidió gestionar el servidor HTTP de prueba con el patrón habitual `& ... ; kill $PID`. Solución: usar el mecanismo de tareas en segundo plano del propio harness (que sí permite detener procesos de forma controlada) en vez de `pkill`. No afecta a los scripts entregados, que no usan `pkill`.
+
+**Riesgos pendientes:** los instaladores asumen que un release real con los 6 binarios + `checksums.txt` estará publicado en `IAMETER_RELEASE_BASE_URL` — verificado que la lógica funciona contra un servidor real, pero no existe todavía un release público real de este proyecto (fuera del alcance del MVP, ver sección 34).
+
+**Siguiente fase:** Fase 8 — endurecimiento, documentación (`SECURITY.md`, `PRIVACY.md`, `README.md`), validación final.
 
 ## Phase 8 — Endurecimiento, documentación, validación final — `[ ]`
 Criterios: SECURITY.md, PRIVACY.md completos y verídicos; `go build ./...`, `go vet ./...`, `go test ./...` pasan; 6 binarios compilados; privacidad verificada contra código.

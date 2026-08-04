@@ -1,0 +1,4 @@
+/dist/
+/iameter
+*.test
+*.out
