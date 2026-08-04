@@ -9,6 +9,7 @@ import (
 
 	"github.com/iameter/collector/internal/config"
 	"github.com/iameter/collector/internal/platform"
+	"github.com/iameter/collector/internal/queue"
 	"github.com/iameter/collector/internal/settings"
 	"github.com/iameter/collector/internal/version"
 )
@@ -111,12 +112,27 @@ func runDoctorChecks(opts config.Options) []doctorCheck {
 
 	checks = append(checks, statusLineCheck())
 
-	checks = append(checks, doctorCheck{Name: "Local queue", Status: checkWarn, Detail: "not yet implemented (Phase 4)"})
+	checks = append(checks, queueCheck(opts.DataDir))
 	checks = append(checks, doctorCheck{Name: "Credential store", Status: checkWarn, Detail: "not yet implemented (Phase 5)"})
 	checks = append(checks, doctorCheck{Name: "Backend connectivity", Status: checkWarn, Detail: "not yet implemented (Phase 5)"})
 	checks = append(checks, doctorCheck{Name: "Daemon", Status: checkWarn, Detail: "not yet implemented (Phase 6)"})
 
 	return checks
+}
+
+func queueCheck(dataDir string) doctorCheck {
+	q, err := queue.Open(dataDir)
+	if err != nil {
+		return doctorCheck{Name: "Local queue", Status: checkErr, Detail: err.Error()}
+	}
+	n, err := q.Len()
+	if err != nil {
+		return doctorCheck{Name: "Local queue", Status: checkErr, Detail: err.Error()}
+	}
+	if n == 0 {
+		return doctorCheck{Name: "Local queue", Status: checkWarn, Detail: "no snapshots captured yet — send a message in Claude Code"}
+	}
+	return doctorCheck{Name: "Local queue", Status: checkOK, Detail: fmt.Sprintf("%d pending snapshot(s)", n)}
 }
 
 func statusLineCheck() doctorCheck {

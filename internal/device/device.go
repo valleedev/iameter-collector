@@ -8,22 +8,16 @@
 package device
 
 import (
-	"crypto/rand"
-	"encoding/base32"
-	"fmt"
 	"os"
 	"strings"
+
+	"github.com/iameter/collector/internal/idgen"
 )
 
 // NewID generates a locally-unique device identifier of the form
-// "dev_XXXXXXXXXXXX" (12 base32 chars, no padding, lowercase).
+// "dev_XXXXXXXXXXXXX".
 func NewID() (string, error) {
-	buf := make([]byte, 8)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("device: generate id: %w", err)
-	}
-	enc := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)
-	return "dev_" + strings.ToLower(enc), nil
+	return idgen.New("dev")
 }
 
 // DefaultName returns a best-effort local display name for this device,

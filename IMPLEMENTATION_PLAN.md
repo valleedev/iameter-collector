@@ -116,8 +116,30 @@ Se consultó `https://code.claude.com/docs/en/settings`: confirma que la configu
 
 **Siguiente fase:** Fase 4 — cola local persistente y funcionamiento offline.
 
-## Phase 4 — Cola local / offline — `[ ]`
+## Phase 4 — Cola local / offline — `[x]`
 Criterios: escritura atómica; dedup; recuperación ante corrupción; límite de tamaño; compactación; concurrente-seguro.
+
+**Archivos creados:** `internal/idgen/idgen.go` (helper de IDs extraído de `device` para reutilizar en `queue`), `internal/queue/{queue,queue_test}.go`. `internal/cli/statusline_cmd.go` extendido para persistir; `status_cmd.go`/`doctor_cmd.go` extendidos con datos reales de cola.
+
+**Funcionalidad implementada:**
+- `queue.Queue` respaldada por un único `queue.json` (array de `Item`), reescrito atómicamente (`fsutil.AtomicWriteFile`) en cada operación mutante bajo `fsutil.FileLock` — la reescritura completa hace que la "compactación" sea inherente a cada escritura, no un paso aparte (decisión documentada en el código).
+- Deduplicación: un snapshot idéntico al último (mismos `used_percentage`/`resets_at` en ambas ventanas) se descarta salvo que hayan pasado ≥5 min (`MinReheartbeat`), en cuyo caso se guarda como heartbeat.
+- Límite de tamaño: `MaxItems=500`, recorte por el extremo más antiguo — el snapshot más reciente sobrevive siempre.
+- Recuperación ante corrupción: JSON inválido se pone en cuarentena (`queue.json.corrupt-<timestamp>`, nunca se borra) y la cola continúa vacía y operativa.
+- `iameter statusline` ahora encola de verdad (objetivo pendiente desde la Fase 2): solo cuando el parseo tuvo éxito y `rate_limits` no está vacío — nunca encola snapshots vacíos ni basura de un parseo fallido.
+- `iameter status`/`iameter doctor` leen la cola real: pendientes, último snapshot, porcentajes y horarios de reinicio.
+
+**Pruebas ejecutadas:** `go test ./...` — 14 pruebas nuevas en `internal/queue` (orden FIFO, dedup dentro/fuera de la ventana de heartbeat, cambio de porcentaje siempre encola, `Ack` elimina por ID, `Ack` de ID desconocido es no-op, recorte a `MaxItems` preservando el más reciente, recuperación de archivo corrupto con cuarentena verificable, archivo vacío tratado como cola vacía, 30 goroutines escribiendo concurrentemente sin pérdidas y con JSON válido al final, `Peek` no elimina, `IncrementAttempts` preserva el ID de idempotencia, ciclo de vida completo sin ninguna dependencia de red). `go vet`, `gofmt -l .` limpios. Prueba manual end-to-end: 3 invocaciones de `statusline` (2 idénticas colapsadas por dedup, 1 sin `rate_limits` correctamente no encolada) seguidas de `status`/`doctor` mostrando los datos reales de la cola. Cross-compilación verificada de nuevo para los 6 targets.
+
+**Decisiones técnicas:**
+- Formato de archivo único (array JSON) en vez de JSONL — dado que toda operación ya requiere el lock exclusivo (para dedup/recorte/compactación), un JSONL de solo-append no aportaría ninguna ventaja real y complicaría la recuperación ante corrupción (una línea rota vs. un archivo entero roto).
+- `MinReheartbeat=5min` y `MaxItems=500` son valores razonables sin requisito numérico explícito en el prompt; documentados como configurables si el uso real lo exige.
+
+**Problemas encontrados:** ninguno bloqueante.
+
+**Riesgos pendientes:** ninguno nuevo. La cola no tiene aún consumidor real (eso es la Fase 5/6: `syncer`/`daemon` llamarán a `Peek`/`Ack`/`IncrementAttempts`).
+
+**Siguiente fase:** Fase 5 — emparejamiento y cliente HTTP contra un mock server de desarrollo.
 
 ## Phase 5 — Emparejamiento y backend — `[ ]`
 Criterios: pairing contra mock server; credenciales nunca en texto plano en logs; cliente HTTP con reintentos/backoff/timeouts/idempotencia; pruebas httptest de todos los códigos de sección 26.

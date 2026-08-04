@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/iameter/collector/internal/config"
 	"github.com/iameter/collector/internal/platform"
+	"github.com/iameter/collector/internal/queue"
 	"github.com/iameter/collector/internal/version"
 )
 
@@ -26,6 +28,7 @@ func cmdStatus(args []string) int {
 	}
 
 	st := buildStatusReport(opts, dc)
+	fillQueueStatus(&st, opts.DataDir)
 
 	if opts.JSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -37,9 +40,8 @@ func cmdStatus(args []string) int {
 	return 0
 }
 
-// statusReport is filled in incrementally as later phases add queue,
-// daemon, and syncer introspection (Phase 4/5/6). Fields default to
-// zero-values / "unknown" until those phases wire real data in.
+// statusReport is filled in incrementally as later phases add daemon and
+// syncer introspection (Phase 5/6). Queue fields (Phase 4) are real.
 type statusReport struct {
 	Paired           bool     `json:"paired"`
 	DeviceName       string   `json:"device_name,omitempty"`
@@ -76,6 +78,43 @@ func buildStatusReport(opts config.Options, dc config.DeviceConfig) statusReport
 	}
 }
 
+// fillQueueStatus adds the pending count and most recent snapshot to st.
+// Errors opening/reading the queue are non-fatal for `status` — an
+// unreadable queue shouldn't stop the rest of the report from printing.
+func fillQueueStatus(st *statusReport, dataDir string) {
+	q, err := queue.Open(dataDir)
+	if err != nil {
+		return
+	}
+	pending, err := q.Pending()
+	if err != nil {
+		return
+	}
+	st.QueuePending = len(pending)
+	if len(pending) == 0 {
+		return
+	}
+	last := pending[len(pending)-1]
+	st.LastSnapshotAt = last.Snapshot.CapturedAt
+	if fh := last.Snapshot.RateLimits.FiveHour; fh != nil {
+		pct := fh.UsedPercentage
+		st.FiveHourPct = &pct
+		st.FiveHourResetsAt = fh.ResetsAt
+	}
+	if sd := last.Snapshot.RateLimits.SevenDay; sd != nil {
+		pct := sd.UsedPercentage
+		st.SevenDayPct = &pct
+		st.SevenDayResetsAt = sd.ResetsAt
+	}
+}
+
+func formatResetTime(unixSeconds int64) string {
+	if unixSeconds <= 0 {
+		return "unknown"
+	}
+	return time.Unix(unixSeconds, 0).UTC().Format(time.RFC3339)
+}
+
 func printStatusHuman(st statusReport) {
 	fmt.Println("IA METER Collector", st.CollectorVersion)
 	fmt.Println()
@@ -95,15 +134,19 @@ func printStatusHuman(st statusReport) {
 
 	switch {
 	case st.FiveHourPct != nil:
-		fmt.Printf("5h usage:      %.1f%%\n", *st.FiveHourPct)
+		fmt.Printf("5h usage:      %.1f%% (resets %s)\n", *st.FiveHourPct, formatResetTime(st.FiveHourResetsAt))
 	default:
 		fmt.Println("5h usage:      no data yet")
 	}
 	switch {
 	case st.SevenDayPct != nil:
-		fmt.Printf("7d usage:      %.1f%%\n", *st.SevenDayPct)
+		fmt.Printf("7d usage:      %.1f%% (resets %s)\n", *st.SevenDayPct, formatResetTime(st.SevenDayResetsAt))
 	default:
 		fmt.Println("7d usage:      no data yet")
+	}
+
+	if st.LastSnapshotAt != "" {
+		fmt.Println("Last snapshot: " + st.LastSnapshotAt)
 	}
 
 	if st.DevBackend {

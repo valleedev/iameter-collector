@@ -16,22 +16,21 @@ import (
 	"github.com/iameter/collector/internal/model"
 	"github.com/iameter/collector/internal/platform"
 	"github.com/iameter/collector/internal/providers/claude"
+	"github.com/iameter/collector/internal/queue"
 	"github.com/iameter/collector/internal/settings"
 	"github.com/iameter/collector/internal/statusline"
 	"github.com/iameter/collector/internal/version"
 )
 
 // cmdStatusline implements section 11: read Claude Code's statusLine JSON
-// from stdin, extract only the whitelisted rate_limits fields, and print a
-// short status line. It never depends on network access and always prints
-// *something* to stdout — a parse failure degrades to "Consumo no
-// disponible" rather than leaving Claude Code's status bar blank or making
-// the command exit non-zero (a broken statusLine command would visibly
-// break Claude Code's UI, which is worse than showing stale/absent data).
-//
-// Queueing the snapshot for sync (section 11 point 9) is wired in once
-// internal/queue exists (Phase 4); for now the snapshot is only built and
-// rendered.
+// from stdin, extract only the whitelisted rate_limits fields, print a
+// short status line, and queue the snapshot for sync. It never depends on
+// network access and always prints *something* to stdout — a parse
+// failure degrades to "Consumo no disponible" rather than leaving Claude
+// Code's status bar blank or making the command exit non-zero (a broken
+// statusLine command would visibly break Claude Code's UI, which is worse
+// than showing stale/absent data). Likewise, a queue failure is logged and
+// swallowed — it must never delay or break the printed status line.
 func cmdStatusline(args []string) int {
 	fs := flag.NewFlagSet("iameter statusline", flag.ContinueOnError)
 	g := registerGlobalFlags(fs)
@@ -84,8 +83,13 @@ func cmdStatusline(args []string) int {
 		rl = &model.RateLimits{}
 	}
 
-	if _, err := ensureDeviceID(opts.ConfigDir); err != nil {
+	deviceID, err := ensureDeviceID(opts.ConfigDir)
+	if err != nil {
 		logger.Warn("statusline: could not persist device id: %v", err)
+	}
+
+	if parseErr == nil && deviceID != "" && !rl.Empty() {
+		enqueueSnapshot(opts.DataDir, deviceID, *rl, logger)
 	}
 
 	if chained != nil {
@@ -114,6 +118,21 @@ func buildSnapshot(deviceID string, rl model.RateLimits) model.UsageSnapshot {
 			Arch: platform.Arch(),
 		},
 		RateLimits: rl,
+	}
+}
+
+// enqueueSnapshot persists the parsed usage data to the local queue
+// (section 11 point 9, section 14) so it survives offline periods until
+// the daemon/syncer (Phase 5/6) can send it. Failures are logged, never
+// fatal — statusline must finish fast regardless of disk issues.
+func enqueueSnapshot(dataDir, deviceID string, rl model.RateLimits, logger *logging.Logger) {
+	q, err := queue.Open(dataDir)
+	if err != nil {
+		logger.Warn("statusline: could not open queue: %v", err)
+		return
+	}
+	if _, err := q.Enqueue(buildSnapshot(deviceID, rl)); err != nil {
+		logger.Warn("statusline: could not enqueue snapshot: %v", err)
 	}
 }
 
