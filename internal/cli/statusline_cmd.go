@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/iameter/collector/internal/capture"
@@ -14,6 +16,7 @@ import (
 	"github.com/iameter/collector/internal/model"
 	"github.com/iameter/collector/internal/platform"
 	"github.com/iameter/collector/internal/providers/claude"
+	"github.com/iameter/collector/internal/settings"
 	"github.com/iameter/collector/internal/statusline"
 	"github.com/iameter/collector/internal/version"
 )
@@ -45,16 +48,52 @@ func cmdStatusline(args []string) int {
 		return 0
 	}
 
-	rl, err := claude.New().Parse(bytes.NewReader(data))
+	chainPath := settings.DefaultChainStatePath(opts.ConfigDir)
+	chained, err := settings.LoadChainState(chainPath)
 	if err != nil {
+		logger.Warn("statusline: could not read chained statusLine state: %v", err)
+	}
+
+	// Parse our own usage data and (if a third-party statusLine was
+	// preserved at install time) run it concurrently, feeding it the same
+	// stdin JSON — section 13: capture usage in parallel while preserving
+	// the previous tool's visual output.
+	var wg sync.WaitGroup
+	var rl *model.RateLimits
+	var parseErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rl, parseErr = claude.New().Parse(bytes.NewReader(data))
+	}()
+
+	var chainedOutput string
+	var chainedErr error
+	if chained != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			chainedOutput, chainedErr = statusline.RunChained(context.Background(), chained.Command, data)
+		}()
+	}
+	wg.Wait()
+
+	if parseErr != nil {
 		// Never log the raw payload — only that parsing failed.
-		logger.Warn("statusline: parse failed: %v", err)
-		fmt.Println(statusline.Render(model.RateLimits{}))
-		return 0
+		logger.Warn("statusline: parse failed: %v", parseErr)
+		rl = &model.RateLimits{}
 	}
 
 	if _, err := ensureDeviceID(opts.ConfigDir); err != nil {
 		logger.Warn("statusline: could not persist device id: %v", err)
+	}
+
+	if chained != nil {
+		if chainedErr == nil {
+			fmt.Println(chainedOutput)
+			return 0
+		}
+		logger.Warn("statusline: chained command failed, falling back to IA METER output: %v", chainedErr)
 	}
 
 	fmt.Println(statusline.Render(*rl))

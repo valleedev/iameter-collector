@@ -90,8 +90,31 @@ Criterios: parser cumple lista blanca estricta; 17 casos de prueba de sección 2
 
 **Siguiente fase:** Fase 3 — integración con `settings.json` de Claude Code (instalación, backup, encadenamiento de statusLine previo).
 
-## Phase 3 — Config Claude Code / instalación local — `[ ]`
+## Phase 3 — Config Claude Code / instalación local — `[x]`
 Criterios: instala/preserva/encadena statusLine previo; backup; idempotente; restaura al desinstalar; soporta rutas con espacios/Unicode; nunca sobrescribe JSON corrupto.
+
+### Verificación contra documentación oficial
+Se consultó `https://code.claude.com/docs/en/settings`: confirma que la configuración de usuario vive en `~/.claude/settings.json` (macOS/Linux) y `%USERPROFILE%\.claude\settings.json` (Windows) — exactamente lo implementado.
+
+**Archivos creados:** `internal/settings/{locate,settings,command,install,uninstall,install_test,uninstall_test}.go`, `internal/statusline/{chain,chain_unix,chain_windows,chain_test}.go`, `internal/cli/{install_cmd,uninstall_cmd}.go`. `statusline_cmd.go` extendido para encadenar.
+
+**Funcionalidad implementada:**
+- `settings.Install`/`settings.Uninstall`: backup automático (una sola vez, nunca se sobrescribe el snapshot original), preserva todas las claves ajenas del JSON (map genérico `map[string]json.RawMessage`), detecta 4 casos (`ausente` / `ya es IA METER` / `binario movido` / `externo → encadenar`), nunca sobrescribe JSON corrupto (`ErrCorruptJSON`), rechaza symlinks (`ErrSymlink`, sección 24).
+- Encadenamiento real: `iameter statusline` ejecuta el comando externo preservado (vía `/bin/sh -c` o `cmd /C`), pasándole el mismo stdin, e imprime exactamente su salida — mientras parsea el consumo en paralelo (goroutines). Si el comando encadenado falla, hace fallback silencioso al render propio (nunca rompe la barra de estado).
+- `BuildCommand` cita la ruta del binario por plataforma (comillas simples POSIX / dobles Windows) para soportar espacios y Unicode (sección 31) — verificado con ruta real `/tmp/iameter fake höme/config with spaces`.
+- `iameter install`/`iameter uninstall` reales: detectan Claude Code (`~/.claude` o `claude` en PATH), configuran/restauran el statusLine, generan `device_id`, informan qué falta (emparejamiento Fase 5, daemon Fase 6) sin fingir que existe.
+- `doctor` ahora reporta de verdad "Claude Code detection" y "StatusLine configuration" (antes eran WARN "not yet implemented").
+
+**Pruebas ejecutadas:** `go test ./...` — 16 pruebas nuevas en `internal/settings` cubriendo exactamente la lista de la sección 26 "Configuración" (archivo inexistente, válido, statusLine ausente/de IA METER/externo, JSON inválido, instalación repetida, restauración, desinstalación, prevención de recursión, symlink) + 5 en `internal/statusline` para el encadenamiento. `go vet`, `gofmt -l .` limpios. Prueba manual end-to-end con el binario real: instalar sobre un `settings.json` con statusLine externo simulando Starship, verificar encadenamiento real (`echo external-tool-output` se ejecuta y su salida se imprime), instalar de nuevo (idempotente), desinstalar (restaura exactamente el comando externo original), desinstalar de nuevo (no-op seguro) — todo bajo una ruta `$HOME` con espacios y diéresis (`fake höme`) para validar la sección 31. Cross-compilación verificada de nuevo para los 6 targets tras estos cambios.
+
+**Decisiones técnicas:**
+- El estado de encadenamiento (`chained_statusline.json`) se guarda en el `config-dir` propio de IA METER, no junto a `settings.json` de Claude Code, para mantener el estado autocontenido.
+- `isIAMeterCommand` usa una heurística (contiene el nombre del binario + termina en "statusline") en vez de comparación exacta de ruta, para seguir detectando una instalación propia aunque el binario se haya movido — limitación aceptada: si el usuario configura manualmente un comando ajeno que también termina en la palabra "statusline" y contiene "iameter" en la ruta, podría clasificarse erróneamente como propio. Caso de borde documentado, no bloqueante.
+- **Bug real encontrado y corregido durante las pruebas:** `RunChained` con un comando colgado (`sh -c "sleep 30"`) no respetaba `ChainTimeout` de 3s — tardaba los 30s completos porque el proceso `sleep` (nieto, huérfano tras matar el shell) mantenía abierto el pipe de stdout, bloqueando `cmd.Run()`. Corregido con grupos de proceso (`Setpgid` + `kill(-pid)` en Unix) y `cmd.WaitDelay` como respaldo multiplataforma. Verificado que no queden procesos `sleep` huérfanos tras el fix.
+
+**Riesgos pendientes:** ninguno nuevo. La detección de Claude Code es best-effort (no bloquea instalación si no se encuentra).
+
+**Siguiente fase:** Fase 4 — cola local persistente y funcionamiento offline.
 
 ## Phase 4 — Cola local / offline — `[ ]`
 Criterios: escritura atómica; dedup; recuperación ante corrupción; límite de tamaño; compactación; concurrente-seguro.

@@ -41,24 +41,6 @@ func cmdDaemon(args []string) int {
 	return notImplemented("daemon", "Phase 6")
 }
 
-func cmdInstall(args []string) int {
-	fs := flag.NewFlagSet("iameter install", flag.ContinueOnError)
-	_ = registerGlobalFlags(fs)
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	return notImplemented("install", "Phase 3")
-}
-
-func cmdUninstall(args []string) int {
-	fs := flag.NewFlagSet("iameter uninstall", flag.ContinueOnError)
-	_ = registerGlobalFlags(fs)
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	return notImplemented("uninstall", "Phase 3")
-}
-
 func cmdUnpair(args []string) int {
 	fs := flag.NewFlagSet("iameter unpair", flag.ContinueOnError)
 	_ = registerGlobalFlags(fs)

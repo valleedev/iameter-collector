@@ -2,12 +2,14 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/iameter/collector/internal/config"
 	"github.com/iameter/collector/internal/platform"
+	"github.com/iameter/collector/internal/settings"
 	"github.com/iameter/collector/internal/version"
 )
 
@@ -101,12 +103,40 @@ func runDoctorChecks(opts config.Options) []doctorCheck {
 		checks = append(checks, doctorCheck{Name: "Backend URL", Status: checkOK, Detail: opts.APIBaseURL})
 	}
 
-	checks = append(checks, doctorCheck{Name: "Claude Code detection", Status: checkWarn, Detail: "not yet implemented (Phase 3)"})
-	checks = append(checks, doctorCheck{Name: "StatusLine configuration", Status: checkWarn, Detail: "not yet implemented (Phase 3)"})
+	if claudeCodeDetected() {
+		checks = append(checks, doctorCheck{Name: "Claude Code detection", Status: checkOK, Detail: "found"})
+	} else {
+		checks = append(checks, doctorCheck{Name: "Claude Code detection", Status: checkWarn, Detail: "~/.claude not found and `claude` not on PATH"})
+	}
+
+	checks = append(checks, statusLineCheck())
+
 	checks = append(checks, doctorCheck{Name: "Local queue", Status: checkWarn, Detail: "not yet implemented (Phase 4)"})
 	checks = append(checks, doctorCheck{Name: "Credential store", Status: checkWarn, Detail: "not yet implemented (Phase 5)"})
 	checks = append(checks, doctorCheck{Name: "Backend connectivity", Status: checkWarn, Detail: "not yet implemented (Phase 5)"})
 	checks = append(checks, doctorCheck{Name: "Daemon", Status: checkWarn, Detail: "not yet implemented (Phase 6)"})
 
 	return checks
+}
+
+func statusLineCheck() doctorCheck {
+	settingsPath, err := settings.Path()
+	if err != nil {
+		return doctorCheck{Name: "StatusLine configuration", Status: checkErr, Detail: err.Error()}
+	}
+	entry, hasEntry, err := settings.CurrentStatusLine(settingsPath)
+	switch {
+	case errors.Is(err, settings.ErrCorruptJSON):
+		return doctorCheck{Name: "StatusLine configuration", Status: checkErr, Detail: "settings.json is not valid JSON"}
+	case errors.Is(err, settings.ErrSymlink):
+		return doctorCheck{Name: "StatusLine configuration", Status: checkErr, Detail: "settings.json is a symlink, refusing to read through it"}
+	case err != nil:
+		return doctorCheck{Name: "StatusLine configuration", Status: checkErr, Detail: err.Error()}
+	case !hasEntry:
+		return doctorCheck{Name: "StatusLine configuration", Status: checkWarn, Detail: "not configured — run `iameter install`"}
+	case settings.IsIAMeterCommand(entry.Command):
+		return doctorCheck{Name: "StatusLine configuration", Status: checkOK, Detail: "configured"}
+	default:
+		return doctorCheck{Name: "StatusLine configuration", Status: checkWarn, Detail: "points at another command — run `iameter install` to chain IA METER onto it"}
+	}
 }
