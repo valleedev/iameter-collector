@@ -1,0 +1,20 @@
+{
+  "model": {"display_name": "Claude Opus", "id": "claude-opus-4"},
+  "workspace": {"current_dir": "/Users/alice/secret-project", "project_dir": "/Users/alice/secret-project"},
+  "session_id": "test-session-abc",
+  "transcript_path": "/Users/alice/.claude/transcripts/abc.jsonl",
+  "cwd": "/Users/alice/secret-project",
+  "cost": {"total_cost_usd": 1.23, "total_duration_ms": 45000},
+  "git": {"branch": "feature/secret-launch", "is_dirty": true},
+  "env": {"OPENAI_API_KEY": "sk-should-never-be-read"},
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 68.4,
+      "resets_at": 1785792600
+    },
+    "seven_day": {
+      "used_percentage": 54.2,
+      "resets_at": 1786107600
+    }
+  }
+}

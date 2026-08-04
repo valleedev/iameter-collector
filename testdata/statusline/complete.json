@@ -1,0 +1,14 @@
+{
+  "model": {"display_name": "Claude Opus"},
+  "session_id": "test-session-abc",
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 68.4,
+      "resets_at": 1785792600
+    },
+    "seven_day": {
+      "used_percentage": 54.2,
+      "resets_at": 1786107600
+    }
+  }
+}

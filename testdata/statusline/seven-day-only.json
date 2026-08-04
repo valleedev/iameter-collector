@@ -1,0 +1,9 @@
+{
+  "session_id": "test-session-abc",
+  "rate_limits": {
+    "seven_day": {
+      "used_percentage": 41.2,
+      "resets_at": 1738857600
+    }
+  }
+}

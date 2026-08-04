@@ -41,11 +41,54 @@ N/A — proyecto nuevo, sin pruebas previas.
 
 ---
 
-## Phase 1 — Núcleo, CLI y modelos — `[ ]`
+## Phase 1 — Núcleo, CLI y modelos — `[x]`
 Criterios de aceptación: compila; `iameter version/status/doctor/statusline/pair/sync/daemon/install/uninstall/unpair` existen y responden (parcial permitido, pero explícito); flags globales parseados; logging no filtra secretos.
 
-## Phase 2 — Captura statusLine — `[ ]`
+**Archivos creados:** `go.mod`, `cmd/iameter/main.go`, `internal/version/{version,runtime}.go`, `internal/model/model.go`, `internal/platform/{platform,dirs}.go`, `internal/logging/logging.go`, `internal/fsutil/{atomic,lock,process_unix,process_windows}.go`, `internal/device/device.go`, `internal/config/{options,device}.go`, `internal/cli/{cli,globals,version_cmd,status_cmd,doctor_cmd,stubs}.go`.
+
+**Funcionalidad implementada:**
+- Router de subcomandos manual (sin cobra), 10 comandos registrados. `version`, `status`, `doctor` con lógica real; `statusline/pair/sync/daemon/install/uninstall/unpair` responden con mensaje explícito "not yet implemented (lands in Phase N)" y exit code 1 — nunca fingen éxito.
+- Flags globales (`--api-base-url`, `--config-dir`, `--data-dir`, `--log-level`, `--json`, `--no-color`) funcionan antes **o** después del subcomando (`splitArgs` los reordena).
+- `IAMETER_API_BASE_URL` respetado; default apunta a `http://127.0.0.1:8787` (mock dev, nunca presentado como producción — `doctor`/`status` emiten WARN explícito si sigue en default).
+- Directorios por SO (XDG en Linux, `Library/Application Support` en macOS, `%LOCALAPPDATA%` en Windows) vía `internal/platform`.
+- `device_id` generado localmente (`dev_` + 8 bytes aleatorios base32), persistido en `device.json` con escritura atómica (`internal/fsutil.AtomicWriteFile`: temp file + fsync + rename) y permisos `0600`.
+- Lock de archivo entre procesos (`internal/fsutil.FileLock`) con detección de locks obsoletos (proceso muerto vía signal-0 en Unix, expiración por tiempo en todas las plataformas) — reutilizado por la cola en Fase 4.
+- Logger propio con `RedactToken()` (nunca imprime tokens completos).
+
+**Pruebas ejecutadas:** `go test ./...` (18 tests, todos en package), `go vet ./...`, `gofmt -l .` — todo limpio. Cross-compilación verificada para los 6 targets (`linux/{amd64,arm64}`, `windows/{amd64,arm64}`, `darwin/{amd64,arm64}`) con `CGO_ENABLED=0`, todos compilan sin error.
+
+**Decisiones técnicas:**
+- Sin dependencias externas (`go.mod` solo tiene el módulo propio) — CLI router manual en vez de `cobra`/`urfave/cli`.
+- Lock propio basado en `O_CREATE|O_EXCL` en vez de `syscall.Flock`, porque Flock no es portable a Windows sin cgo.
+- `atomicWriteFile` extraído a `internal/fsutil` desde el primer commit (en vez de duplicarlo luego en `queue`/`settings`) tras notar que Phase 3 y 4 lo necesitarían igual.
+
+**Problemas encontrados y corregidos:** bug inicial en `cli.Run` — los flags globales antes del subcomando (`iameter --config-dir X status`) no se reconocían porque `Run` asumía `args[0]` como comando. Corregido con `splitArgs`, verificado con prueba manual.
+
+**Riesgos pendientes:** ninguno nuevo respecto a Fase 0. Los checks de `doctor` para Claude Code/statusLine/cola/credenciales/daemon quedan explícitamente como WARN "not yet implemented" hasta que esas fases se completen — no se ocultan.
+
+**Siguiente fase:** Fase 2 — captura statusLine y parser del proveedor Claude Code.
+
+## Phase 2 — Captura statusLine — `[x]`
 Criterios: parser cumple lista blanca estricta; 17 casos de prueba de sección 26 "Parser" cubiertos; fixtures de sección 27 creados; sin red obligatoria; ausencia ≠ cero.
+
+**Archivos creados:** `internal/providers/provider.go` (interfaz `UsageProvider`), `internal/providers/claude/{claude,claude_test}.go`, `internal/capture/{capture,capture_test}.go`, `internal/statusline/{render,render_test}.go`, `internal/cli/statusline_cmd.go`, 6 fixtures en `testdata/statusline/`.
+
+**Funcionalidad implementada:**
+- `providers.UsageProvider{Name() string; Parse(io.Reader) (*model.RateLimits, error)}` — interfaz de la sección 7. `claude.Provider` es la única implementación; la lista blanca se aplica **a nivel de tipo**: `rawEnvelope` solo declara `rate_limits`, así que `encoding/json` descarta automáticamente cualquier otro campo (model, workspace, cost, session_id, transcript_path, git, cwd, env, etc.) — no hay filtrado posterior que se pueda olvidar.
+- Ventana inválida (porcentaje fuera de 0–100, tipo incorrecto, `resets_at` nulo/inválido/negativo) se descarta silenciosamente (`nil`, ventana ausente) en vez de fallar todo el parseo o inventar un valor — 0% se preserva como válido, nunca se confunde con ausencia.
+- `internal/capture.ReadLimited`: límite de 1 MiB antes de tocar el parser.
+- `internal/statusline.Render`: los 4 formatos exactos de la sección 12.
+- `iameter statusline`: stdin → capture → parser → render → stdout. **Nunca** bloquea por red, **siempre** imprime algo y sale con código 0 incluso ante JSON malformado/vacío/gigante (degrada a "Consumo no disponible" y registra el motivo en stderr — nunca el JSON crudo). Genera y persiste `device_id` en el primer uso si no existe (necesario para el snapshot antes de emparejar).
+
+**Pruebas ejecutadas:** `go test ./...` (parser: 17/17 casos de la sección 26 + fixtures de la sección 27, incluida prueba de concurrencia con 50 goroutines; capture: límite exacto/por encima/vacío; statusline: los 4 formatos + 0% explícito). `go vet ./...`, `gofmt -l .` limpios. Prueba manual end-to-end con los 6 fixtures reales vía binario compilado, incluida una entrada de 1.1 MB (rechazada) y 20 invocaciones concurrentes contra el mismo `device.json` (sin corrupción, JSON válido tras la carrera, verificado con `python3 -c "json.load(...)"`). Latencia medida: ~2 ms.
+
+**Decisiones técnicas:**
+- `resets_at: null` o inválido descarta la ventana completa (no solo el campo) — un timestamp de reinicio inventado sería tan engañoso como un porcentaje inventado, aunque el prompt solo lo exige explícitamente para porcentajes.
+- El comando `statusline` nunca retorna código de salida distinto de 0 por fallos de parseo/captura, para no romper la barra de estado de Claude Code; los errores solo van a stderr.
+
+**Problemas encontrados:** ninguno bloqueante. Riesgo menor identificado y aceptado: en una carrera de *primer arranque* (dos invocaciones concurrentes sin `device.json` previo), ambas generan un `device_id` distinto y la última escritura atómica gana — el archivo nunca se corrompe, pero el id "definitivo" es no determinista en ese instante único. No afecta a snapshots ya emparejados (Fase 5 adopta el `device_id` del backend). Documentado, no bloquea aceptación.
+
+**Siguiente fase:** Fase 3 — integración con `settings.json` de Claude Code (instalación, backup, encadenamiento de statusLine previo).
 
 ## Phase 3 — Config Claude Code / instalación local — `[ ]`
 Criterios: instala/preserva/encadena statusLine previo; backup; idempotente; restaura al desinstalar; soporta rutas con espacios/Unicode; nunca sobrescribe JSON corrupto.

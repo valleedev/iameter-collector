@@ -1,0 +1,5 @@
+{
+  "model": {"display_name": "Claude Opus"},
+  "session_id": "test-session-abc",
+  "workspace": {"current_dir": "/home/user/project"}
+}

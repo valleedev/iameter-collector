@@ -14,15 +14,6 @@ func notImplemented(cmdName, phase string) int {
 	return 1
 }
 
-func cmdStatusline(args []string) int {
-	fs := flag.NewFlagSet("iameter statusline", flag.ContinueOnError)
-	_ = registerGlobalFlags(fs)
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	return notImplemented("statusline", "Phase 2")
-}
-
 func cmdPair(args []string) int {
 	fs := flag.NewFlagSet("iameter pair", flag.ContinueOnError)
 	_ = registerGlobalFlags(fs)
