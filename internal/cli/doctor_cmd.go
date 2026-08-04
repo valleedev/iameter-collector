@@ -11,6 +11,7 @@ import (
 
 	"github.com/iameter/collector/internal/config"
 	"github.com/iameter/collector/internal/credentials"
+	"github.com/iameter/collector/internal/daemon"
 	"github.com/iameter/collector/internal/httpclient"
 	"github.com/iameter/collector/internal/platform"
 	"github.com/iameter/collector/internal/queue"
@@ -119,7 +120,7 @@ func runDoctorChecks(opts config.Options) []doctorCheck {
 	checks = append(checks, queueCheck(opts.DataDir))
 	checks = append(checks, credentialStoreCheck(opts.DataDir))
 	checks = append(checks, backendConnectivityCheck(opts.APIBaseURL, opts.IsDefaultDevBackend()))
-	checks = append(checks, doctorCheck{Name: "Daemon", Status: checkWarn, Detail: "not yet implemented (Phase 6)"})
+	checks = append(checks, daemonCheck())
 
 	return checks
 }
@@ -162,6 +163,21 @@ func backendConnectivityCheck(apiBaseURL string, isDevDefault bool) doctorCheck 
 		return doctorCheck{Name: "Backend connectivity", Status: status, Detail: "unreachable: " + err.Error()}
 	}
 	return doctorCheck{Name: "Backend connectivity", Status: checkOK, Detail: apiBaseURL}
+}
+
+func daemonCheck() doctorCheck {
+	st, err := daemon.NewServiceManager().Status()
+	if err != nil {
+		return doctorCheck{Name: "Daemon", Status: checkErr, Detail: err.Error()}
+	}
+	switch {
+	case st.Running:
+		return doctorCheck{Name: "Daemon", Status: checkOK, Detail: st.Detail}
+	case st.Installed:
+		return doctorCheck{Name: "Daemon", Status: checkWarn, Detail: "registered but not running: " + st.Detail}
+	default:
+		return doctorCheck{Name: "Daemon", Status: checkWarn, Detail: "not registered — run `iameter install`. " + st.Detail}
+	}
 }
 
 func statusLineCheck() doctorCheck {

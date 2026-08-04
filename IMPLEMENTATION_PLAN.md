@@ -172,8 +172,33 @@ Criterios: pairing contra mock server; credenciales nunca en texto plano en logs
 
 **Siguiente fase:** Fase 6 — daemon multiplataforma (sincronización en segundo plano, heartbeats, backoff exponencial, registro como servicio de usuario en los tres SO).
 
-## Phase 6 — Daemon — `[ ]`
+## Phase 6 — Daemon — `[x]`
 Criterios: single-instance; graceful shutdown; heartbeat; backoff+jitter; respeta Retry-After; detiene reintentos en 401/403; `iameter sync` sincroniza una vez y termina.
+
+**Archivos creados:** `internal/daemon/{backoff,daemon,service,service_linux,service_darwin,service_windows}.go` + tests (`backoff_test`, `daemon_test`, `service_linux_test`, `service_darwin_test`, `service_windows_test`), `internal/cli/daemon_cmd.go`. Extendidos: `install_cmd.go` (registro de servicio + `--pair`), `uninstall_cmd.go` (baja de servicio), `pair_cmd.go` (lógica compartida `performPairing`), `doctor_cmd.go`/`status_cmd.go` (estado real del daemon). Eliminado `stubs.go` (ya no quedan comandos pendientes).
+
+**Funcionalidad implementada:**
+- `daemon.Run`: single-instance vía `fsutil.FileLock` (reutilizado de la Fase 1/4, con detección de locks obsoletos); apagado limpio por cancelación de contexto (`SIGINT`/`SIGTERM` capturados en el CLI); heartbeat en su propio ticker independiente del ciclo de sync.
+- Backoff exponencial con jitter (hasta 20%), respetando `Retry-After` cuando el backend lo indica y es mayor que el backoff calculado.
+- Ante `401`/`403` o dispositivo no emparejado: el daemon deja de reintentar sync inmediatamente y pasa a un intervalo de "pausa" largo (por defecto 5 min) que solo revisa si el dispositivo volvió a emparejarse — verificado con test que cuenta requests reales al backend y confirma que no lo bombardea.
+- Registro de servicio por SO (sección 20), sin privilegios de administrador en ningún caso:
+  - **Linux**: unit `systemd --user` generado y escrito en `$XDG_CONFIG_HOME/systemd/user/iameter.service` (o `~/.config/...`), `systemctl --user enable --now`/`disable --now`. Si `systemctl` no está en PATH, `Install` devuelve un error descriptivo (fallback documentado, sección 20) en vez de fallar silenciosamente o inventar otro mecanismo.
+  - **macOS**: `LaunchAgent` (`~/Library/LaunchAgents/com.iameter.collector.plist`) con `RunAtLoad`/`KeepAlive`, `launchctl load/unload -w`.
+  - **Windows**: Tarea Programada (`schtasks /Create /SC ONLOGON /RL LIMITED`, sin admin), arrancada inmediatamente tras crearla.
+- `iameter daemon`: corre el loop en primer plano (lo que systemd/launchd/schtasks supervisan); `iameter install` ahora registra el servicio y acepta `--pair CODE` para emparejar en el mismo paso; `iameter uninstall` da de baja el servicio.
+- `doctor`/`status`: estado real del daemon (`Installed`/`Running`) en vez del `WARN "not yet implemented"` anterior.
+
+**Pruebas ejecutadas:** `go test ./...` — `daemon`: 5 pruebas de backoff/jitter puras + 6 de integración real contra un `httptest.Server` (single-instance lock, apagado limpio, sync exitoso reinicia el intervalo, fallos repetidos aumentan el intervalo, pausa tras 401 sin bombardear el backend — verificado contando requests reales, heartbeat dispara de verdad); generadores de unidad de servicio probados como funciones puras para los 3 SO (contenido del unit systemd, plist de LaunchAgent, comando `schtasks`) — **sin** llamadas reales a `systemctl`/`launchctl`/`schtasks` dentro de la suite automatizada (ver decisión de seguridad abajo). `go vet`/`gofmt -l .`/compilación cruzada verificados en los 3 SO de nuevo.
+
+Prueba manual end-to-end con el binario real y `iameter mock-server`: `iameter daemon` en primer plano (drena la cola sola, sin llamar a `iameter sync`), una segunda instancia concurrente se rechaza con "another instance is already running", apagado limpio verificado con `timeout`+`SIGTERM`. Adicionalmente se verificó el camino de fallo controlado de `install`/`uninstall` cuando `systemctl` no está en el `PATH` (mensaje `WARN` claro, el resto de la instalación continúa).
+
+**Decisión de seguridad importante:** este entorno tiene un `systemctl --user` real y activo (sesión del usuario real de la máquina, no un contenedor desechable). **Deliberadamente no se ejecutó `systemctl --user enable --now`/`launchctl load` contra la sesión real** como parte de esta tarea, porque registrar un servicio persistente con reinicio automático en la máquina real del operador sin que lo haya pedido explícitamente sería una mutación de su entorno fuera del alcance solicitado. Se verificó en su lugar: (a) la generación de contenido es correcta (pruebas unitarias), (b) el camino de error cuando `systemctl` no está disponible funciona limpiamente, (c) `systemctl --user status` (de solo lectura) confirma que el mecanismo existe y sería utilizable. La activación real del servicio en Linux/macOS/Windows queda como verificación manual pendiente para quien despliegue conscientemente (documentado también en limitaciones de la Fase 8).
+
+**Problemas encontrados:** ninguno nuevo en el loop del daemon. Se descubrió y corrigió una inconsistencia de citado en `quoteUnitPath` (solo citaba si detectaba espacios, dejando comillas embebidas sin escapar en rutas sin espacios) — ahora cita siempre, igual que la implementación de Windows.
+
+**Riesgos pendientes:** activación real de systemd/launchd/schtasks no probada end-to-end contra un SO real por la razón de seguridad explicada arriba — solo generación de contenido + manejo de errores verificados.
+
+**Siguiente fase:** Fase 7 — instaladores (`install.sh`/`install.ps1`) y CI/CD (GitHub Actions, compilación de los 6 targets, checksums).
 
 ## Phase 7 — Instaladores y distribución — `[ ]`
 Criterios: 4 scripts creados; detectan SO/arch; verifican SHA-256; rollback; CI compila 6 targets + checksums.

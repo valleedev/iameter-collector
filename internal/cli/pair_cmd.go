@@ -36,50 +36,13 @@ func cmdPair(args []string) int {
 	code := fs.Arg(0)
 	opts := g.resolve()
 
-	dc, err := config.LoadDeviceConfig(opts.ConfigDir)
+	result, creds, err := performPairing(opts, code)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "iameter pair: load device config:", err)
-		return 1
-	}
-	if dc.Paired {
-		fmt.Println("Este dispositivo ya está emparejado. Ejecuta `iameter unpair` primero si quieres volver a emparejarlo.")
-		return 1
-	}
-
-	deviceName := dc.DeviceName
-	if deviceName == "" {
-		deviceName = device.DefaultName()
-	}
-	info := pairing.DeviceInfo{
-		Name:             deviceName,
-		OS:               platform.OS(),
-		Arch:             platform.Arch(),
-		CollectorVersion: version.Version,
-	}
-
-	client := httpclient.New(opts.APIBaseURL)
-	ctx, cancel := context.WithTimeout(context.Background(), pairTimeout)
-	defer cancel()
-
-	result, err := pairing.Pair(ctx, client, code, info)
-	if err != nil {
+		if errors.Is(err, errAlreadyPairedLocally) {
+			fmt.Println("Este dispositivo ya está emparejado. Ejecuta `iameter unpair` primero si quieres volver a emparejarlo.")
+			return 1
+		}
 		fmt.Fprintln(os.Stderr, "iameter pair:", pairErrorMessage(err))
-		return 1
-	}
-
-	creds := credentials.New(opts.DataDir)
-	if err := creds.Save("device_token", []byte(result.DeviceToken)); err != nil {
-		fmt.Fprintln(os.Stderr, "iameter pair: could not store device token:", err)
-		return 1
-	}
-
-	dc.DeviceID = result.DeviceID // backend's device_id supersedes the local one
-	dc.DeviceName = deviceName
-	dc.Paired = true
-	dc.UserID = result.UserID
-	dc.PairedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := config.SaveDeviceConfig(opts.ConfigDir, dc); err != nil {
-		fmt.Fprintln(os.Stderr, "iameter pair: could not save device config:", err)
 		return 1
 	}
 
@@ -103,6 +66,60 @@ func cmdPair(args []string) int {
 	fmt.Println()
 	fmt.Println("Ejecuta `iameter sync` o `iameter daemon` para empezar a sincronizar.")
 	return 0
+}
+
+// errAlreadyPairedLocally is a client-side short-circuit: this collector
+// already has a stored device token, so a re-pair must go through
+// `iameter unpair` first rather than silently overwriting credentials.
+var errAlreadyPairedLocally = errors.New("device already paired locally")
+
+// performPairing runs the full pairing exchange and persists the result
+// (device config + credential store). Shared by `iameter pair` and
+// `iameter install --pair CODE`.
+func performPairing(opts config.Options, code string) (*pairing.Result, credentials.Store, error) {
+	dc, err := config.LoadDeviceConfig(opts.ConfigDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if dc.Paired {
+		return nil, nil, errAlreadyPairedLocally
+	}
+
+	deviceName := dc.DeviceName
+	if deviceName == "" {
+		deviceName = device.DefaultName()
+	}
+	info := pairing.DeviceInfo{
+		Name:             deviceName,
+		OS:               platform.OS(),
+		Arch:             platform.Arch(),
+		CollectorVersion: version.Version,
+	}
+
+	client := httpclient.New(opts.APIBaseURL)
+	ctx, cancel := context.WithTimeout(context.Background(), pairTimeout)
+	defer cancel()
+
+	result, err := pairing.Pair(ctx, client, code, info)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	creds := credentials.New(opts.DataDir)
+	if err := creds.Save("device_token", []byte(result.DeviceToken)); err != nil {
+		return nil, nil, fmt.Errorf("could not store device token: %w", err)
+	}
+
+	dc.DeviceID = result.DeviceID // backend's device_id supersedes the local one
+	dc.DeviceName = deviceName
+	dc.Paired = true
+	dc.UserID = result.UserID
+	dc.PairedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := config.SaveDeviceConfig(opts.ConfigDir, dc); err != nil {
+		return nil, nil, fmt.Errorf("could not save device config: %w", err)
+	}
+
+	return result, creds, nil
 }
 
 func pairErrorMessage(err error) string {

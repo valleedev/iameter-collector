@@ -8,20 +8,22 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/iameter/collector/internal/daemon"
 	"github.com/iameter/collector/internal/platform"
 	"github.com/iameter/collector/internal/settings"
 	"github.com/iameter/collector/internal/version"
 )
 
-// cmdInstall wires IA METER into Claude Code's statusLine (section 13/21).
-// It assumes the iameter binary is already at its final location — placing
-// it there is the job of installers/install.sh|ps1 (Phase 7). Daemon
-// service registration (Phase 6) and pairing (Phase 5) are not yet part of
-// this command; it reports that plainly rather than pretending to do them.
+// cmdInstall wires IA METER into Claude Code's statusLine (section 13/21),
+// registers the background daemon as a per-user service (section 20), and
+// optionally pairs with the backend if --pair is given. It assumes the
+// iameter binary is already at its final location — placing it there is
+// the job of installers/install.sh|ps1 (Phase 7).
 func cmdInstall(args []string) int {
 	fs := flag.NewFlagSet("iameter install", flag.ContinueOnError)
 	g := registerGlobalFlags(fs)
-	if err := fs.Parse(args); err != nil {
+	pairCode := fs.String("pair", "", "pairing code to use during install (optional)")
+	if err := fs.Parse(reorderFlagsFirst(args)); err != nil {
 		return 2
 	}
 	opts := g.resolve()
@@ -57,16 +59,37 @@ func cmdInstall(args []string) int {
 		return 1
 	}
 
+	var pairErr error
+	paired := false
+	if *pairCode != "" {
+		_, _, pairErr = performPairing(opts, *pairCode)
+		paired = pairErr == nil
+	}
+
+	svcErr := daemon.NewServiceManager().Install(binPath)
+	svcRegistered := svcErr == nil
+
 	if opts.JSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return zeroOr(enc.Encode(map[string]any{
+		out := map[string]any{
 			"binary_path":       binPath,
 			"settings_path":     settingsPath,
 			"statusline_action": res.Action,
 			"device_id":         deviceID,
 			"claude_code_found": claudeCodeDetected(),
-		}))
+			"daemon_registered": svcRegistered,
+		}
+		if svcErr != nil {
+			out["daemon_error"] = svcErr.Error()
+		}
+		if *pairCode != "" {
+			out["paired"] = paired
+			if pairErr != nil {
+				out["pair_error"] = pairErrorMessage(pairErr)
+			}
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return zeroOr(enc.Encode(out))
 	}
 
 	fmt.Printf("IA METER Collector %s\n\n", version.Version)
@@ -89,11 +112,31 @@ func cmdInstall(args []string) int {
 	}
 	fmt.Println("✓ Configuración anterior respaldada en", cfg.BackupPath)
 	fmt.Printf("✓ device_id local: %s\n", deviceID)
-	fmt.Println("[WARN] Emparejamiento con el backend: pendiente (Phase 5) — ejecuta `iameter pair <CODE>` cuando esté disponible")
-	fmt.Println("[WARN] Sincronización en segundo plano: pendiente (Phase 6)")
+
+	if svcRegistered {
+		fmt.Println("✓ Sincronización en segundo plano iniciada")
+	} else {
+		fmt.Println("[WARN] No se pudo registrar el daemon como servicio:", svcErr)
+		fmt.Println("       Puedes ejecutar `iameter daemon` manualmente.")
+	}
+
+	switch {
+	case *pairCode == "":
+		fmt.Println("[WARN] Dispositivo no emparejado — ejecuta `iameter pair <CODE>`")
+	case paired:
+		fmt.Println("✓ Dispositivo emparejado")
+	default:
+		fmt.Println("[WARN] Emparejamiento fallido:", pairErrorMessage(pairErr))
+	}
+
 	fmt.Println()
-	fmt.Println("Abre Claude Code y envía un mensaje para obtener el primer dato de consumo,")
-	fmt.Println("luego ejecuta `iameter status`.")
+	if paired {
+		fmt.Println("Abre Claude Code y envía un mensaje para obtener el primer dato de consumo,")
+		fmt.Println("luego ejecuta `iameter status`.")
+	} else {
+		fmt.Println("IA METER está instalado correctamente, pero el dispositivo todavía no está")
+		fmt.Println("emparejado. Ejecuta `iameter pair <CODE>` para empezar a sincronizar.")
+	}
 	return 0
 }
 

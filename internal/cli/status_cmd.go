@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/iameter/collector/internal/config"
+	"github.com/iameter/collector/internal/daemon"
 	"github.com/iameter/collector/internal/platform"
 	"github.com/iameter/collector/internal/queue"
 	"github.com/iameter/collector/internal/version"
@@ -30,6 +31,9 @@ func cmdStatus(args []string) int {
 	st := buildStatusReport(opts, dc)
 	fillUsageStatus(&st, opts.ConfigDir)
 	fillQueueStatus(&st, opts.DataDir)
+	if svcStatus, err := daemon.NewServiceManager().Status(); err == nil {
+		st.DaemonRunning = svcStatus.Running
+	}
 
 	if opts.JSON {
 		enc := json.NewEncoder(os.Stdout)
